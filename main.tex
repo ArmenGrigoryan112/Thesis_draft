@@ -18,6 +18,7 @@
 %\usepackage{float}
 %\usepackage{type1cm}
 \usepackage{lettrine}
+\usepackage{eso-pic}
 \linespread{0.9}
 %\usepackage{chngcntr}
 \usepackage[nottoc, notlof, notlot]{tocbibind}
@@ -34,19 +35,19 @@
 			citecolor=red,
 			urlcolor=blue,
 			pdftitle={UAV Navigation in the absence of a GPS signal - CV and AI techniques for ground point localization and comparison with a map (aerial or satellite)},
-			pdfauthor={FirstName LastName},
+			pdfauthor={Armen Grigoryan},
 			pdfkeywords={thesis, sapienza, roma, university}
  }
 
 \title{UAV Navigation in the absence of a GPS signal -- CV and AI techniques for ground point localization and comparison with a map (aerial or satellite)}
-\author{FirstName LastName}
-\IDnumber{matricule}
-\course[]{Fisica e Astrofisica}
-\courseorganizer{Facolt\`a di Scienze Matematiche Fisiche e Naturali}
-\submitdate{2014/2015}
-\copyyear{2015}
-\advisor{Prof. advisor}
-\coadvisor{Dr. co-advisor}
+\author{Armen Grigoryan}
+\IDnumber{2109932}
+\course{Applied Computer Science and Artificial Intelligence}
+\courseorganizer{Facolt\`a di Ingegneria dell'Informazione, Informatica e Statistica\\[2mm]Dipartimento di Informatica}
+\submitdate{2025/2026}
+\copyyear{2026}
+\advisor{Marco Raoul Marini}
+\coadvisor[ext]{Denis Tavaris}
 \authoremail{authorsemail@something.com}
 \examdate{22 September 2015}
 \examiner{Prof. ...} \examiner{Prof. ...} \examiner{Prof. ...}  \examiner{Prof. ...}  \examiner{Prof. ...} \examiner{Prof. ...}  \examiner{Prof. ...} 
@@ -57,6 +58,11 @@
 \begin{document}
 
 \frontmatter
+% University of Udine logo in the top-right corner of the title page only
+\AddToShipoutPictureFG*{%
+  \AtPageUpperLeft{%
+    \put(\LenToUnit{\paperwidth-2cm},\LenToUnit{-2.8cm}){%
+      \makebox[0pt][r]{\raisebox{-\height}{\includegraphics[width=5cm]{images/logo-uniud}}}}}}
 \maketitle
 
 \begin{abstract}
