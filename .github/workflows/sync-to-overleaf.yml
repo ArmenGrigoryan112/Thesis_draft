@@ -45,7 +45,18 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add overleaf "https://git:${OVERLEAF_TOKEN}@git.overleaf.com/${OVERLEAF_PROJECT_ID}"
-          git fetch --quiet overleaf master
+          # Detect Overleaf's branch name (e.g. master or main) instead of assuming it.
+          OL_BRANCH=$(git ls-remote --symref overleaf HEAD | awk '/^ref:/ {sub("refs/heads/","",$2); print $2; exit}')
+          if [ -z "$OL_BRANCH" ]; then
+            OL_BRANCH=$(git ls-remote --heads overleaf | awk '{sub("refs/heads/","",$2); print $2; exit}')
+          fi
+          echo "Overleaf branch: ${OL_BRANCH:-<none>}"
+          git ls-remote overleaf
+          if [ -z "$OL_BRANCH" ]; then
+            echo "::error::Could not find any branch in the Overleaf project. Check OVERLEAF_PROJECT_ID."
+            exit 1
+          fi
+          git fetch --quiet overleaf "$OL_BRANCH"
 
           OL_COMMIT=$(git rev-parse FETCH_HEAD)
           OL_TREE=$(git rev-parse "${OL_COMMIT}^{tree}")
@@ -68,5 +79,5 @@ jobs:
 
           MSG="Sync from GitHub: $(git log -1 --format=%s HEAD) ($(git rev-parse --short HEAD))"
           NEW=$(git commit-tree "$GH_TREE" -p "$OL_COMMIT" -m "$MSG")
-          git push overleaf "${NEW}:refs/heads/master"
+          git push overleaf "${NEW}:refs/heads/${OL_BRANCH}"
           echo "Overleaf updated to main @ $(git rev-parse --short HEAD)"
