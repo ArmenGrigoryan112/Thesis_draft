@@ -19,6 +19,11 @@
 %\usepackage{type1cm}
 \usepackage{lettrine}
 \usepackage{eso-pic}
+
+% Do not print the back of the title page (exam board / copyright page)
+\makeatletter
+\let\SAP@composebacktitlepage\relax
+\makeatother
 \linespread{0.9}
 %\usepackage{chngcntr}
 \usepackage[nottoc, notlof, notlot]{tocbibind}
@@ -64,6 +69,24 @@
     \put(\LenToUnit{\paperwidth-2cm},\LenToUnit{-2.8cm}){%
       \makebox[0pt][r]{\raisebox{-\height}{\includegraphics[width=5cm]{images/logo-uniud}}}}}}
 \maketitle
+
+\begin{acknowledgments}[Acknowledgements]
+\linespread{1.15}\selectfont\setlength{\parskip}{0.8em}%
+I would like to express my deepest gratitude to my parents Sargis and Narine for their unconditional love and support, for providing me with the opportunity to constantly better myself while always being supported and cared for. To my sister Inga who has gone with me through the hardest and most cheerful moments of my life, thank you for looking after me. I strive to be a worthy son to the family, I am truly grateful to all of you.
+
+To all those Professors who blessed me with knowledge throughout all these years, all my future achievements are built upon the foundation you provided me with. Eternally grateful to Professor Marco Marini, who instilled in me the passion for Computer Vision and allowed me to work on this project under his supervision.
+
+To all my friends, from back Home and the new ones from Italy. The memories we have built together will never be forgotten. Thanks to all of you for letting me into your worlds, beautiful cultures and allowing me to explore new ways of life. Discovering Italy with you was a blessing. Special thanks to my friend Edgar, who despite being thousands of kilometers away managed to be the anchor I could always rely on all these years.
+
+To all those who doubted me, I am grateful for the fuel you provided me to never stop in the face of hardship.
+
+To the Eternal City and to Romans, I could have never chosen a better place to spend my formative years. The character you forced me to develop, the beauty you showed me will stay with me forever.
+
+\bigskip
+% Armenian closing line: "Դեպի նոր հաջողություններ։" (pdfLaTeX has no Armenian
+% font, so it is included as a vector PDF typeset in FreeSerif Italic)
+\hfill\includegraphics{images/armenian-closing}
+\end{acknowledgments}
 
 \begin{abstract}
 write your abstract here
