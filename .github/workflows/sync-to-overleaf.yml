@@ -1,0 +1,83 @@
+# Mirrors every push to `main` into the Overleaf project, so there is no need
+# to click "Pull GitHub changes into Overleaf".
+#
+# Overleaf's git history is separate from GitHub's, so instead of pushing the
+# commits themselves this makes one new commit on top of Overleaf's history
+# whose content equals the latest `main`.
+#
+# Safety: it only syncs if Overleaf's current content matches some commit
+# already on `main` (i.e. Overleaf has no edits that are missing from GitHub).
+# Otherwise it stops without touching Overleaf: first use
+# "Push Overleaf changes to GitHub" in Overleaf, which re-triggers this workflow.
+#
+# Required repository secrets: OVERLEAF_TOKEN, OVERLEAF_PROJECT_ID
+
+name: Sync to Overleaf
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: overleaf-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push latest main to Overleaf
+        env:
+          OVERLEAF_TOKEN: ${{ secrets.OVERLEAF_TOKEN }}
+          OVERLEAF_PROJECT_ID: ${{ secrets.OVERLEAF_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVERLEAF_TOKEN}" ] || [ -z "${OVERLEAF_PROJECT_ID}" ]; then
+            echo "::error::Secrets OVERLEAF_TOKEN and OVERLEAF_PROJECT_ID must both be set."
+            exit 1
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add overleaf "https://git:${OVERLEAF_TOKEN}@git.overleaf.com/${OVERLEAF_PROJECT_ID}"
+          # Detect Overleaf's branch name (e.g. master or main) instead of assuming it.
+          OL_BRANCH=$(git ls-remote --symref overleaf HEAD | awk '/^ref:/ {sub("refs/heads/","",$2); print $2; exit}')
+          if [ -z "$OL_BRANCH" ]; then
+            OL_BRANCH=$(git ls-remote --heads overleaf | awk '{sub("refs/heads/","",$2); print $2; exit}')
+          fi
+          echo "Overleaf branch: ${OL_BRANCH:-<none>}"
+          git ls-remote overleaf
+          if [ -z "$OL_BRANCH" ]; then
+            echo "::error::Could not find any branch in the Overleaf project. Check OVERLEAF_PROJECT_ID."
+            exit 1
+          fi
+          git fetch --quiet overleaf "$OL_BRANCH"
+
+          OL_COMMIT=$(git rev-parse FETCH_HEAD)
+          OL_TREE=$(git rev-parse "${OL_COMMIT}^{tree}")
+          GH_TREE=$(git rev-parse "HEAD^{tree}")
+
+          if [ "$OL_TREE" = "$GH_TREE" ]; then
+            echo "Overleaf already matches main. Nothing to do."
+            exit 0
+          fi
+
+          # Is Overleaf's content identical to some commit on main?
+          SAFE=no
+          for c in $(git rev-list HEAD); do
+            if [ "$(git rev-parse "${c}^{tree}")" = "$OL_TREE" ]; then SAFE=yes; break; fi
+          done
+          if [ "$SAFE" != yes ]; then
+            echo "::error::Overleaf has edits that are not on GitHub yet. In Overleaf use Menu > GitHub > 'Push Overleaf changes to GitHub' (this re-runs the sync). Overleaf was NOT modified."
+            exit 1
+          fi
+
+          MSG="Sync from GitHub: $(git log -1 --format=%s HEAD) ($(git rev-parse --short HEAD))"
+          NEW=$(git commit-tree "$GH_TREE" -p "$OL_COMMIT" -m "$MSG")
+          git push overleaf "${NEW}:refs/heads/${OL_BRANCH}"
+          echo "Overleaf updated to main @ $(git rev-parse --short HEAD)"
