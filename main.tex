@@ -23,6 +23,12 @@
 % Do not print the back of the title page (exam board / copyright page)
 \makeatletter
 \let\SAP@composebacktitlepage\relax
+
+% Arabic page numbers everywhere (no roman numerals in the front matter),
+% counting continuously from the title page through the chapters
+\usepackage{etoolbox}
+\g@addto@macro\frontmatter{\pagenumbering{arabic}}
+\patchcmd{\mainmatter}{\pagenumbering{arabic}}{}{}{\PackageWarning{main}{Could not patch mainmatter}}
 \makeatother
 \linespread{0.9}
 %\usepackage{chngcntr}
@@ -68,7 +74,9 @@
   \AtPageUpperLeft{%
     \put(\LenToUnit{\paperwidth-2cm},\LenToUnit{-2.8cm}){%
       \makebox[0pt][r]{\raisebox{-\height}{\includegraphics[width=5cm]{images/logo-uniud}}}}}}
+\hypersetup{pageanchor=false}% title page gets no page link (avoids a duplicate page 1)
 \maketitle
+\hypersetup{pageanchor=true}
 
 \begin{acknowledgments}[Acknowledgements]
 \linespread{1.15}\selectfont\setlength{\parskip}{0.8em}%
