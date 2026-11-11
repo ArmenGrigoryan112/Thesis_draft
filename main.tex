@@ -23,6 +23,10 @@
 % Do not print the back of the title page (exam board / copyright page)
 \makeatletter
 \let\SAP@composebacktitlepage\relax
+
+% Front matter (title page, acknowledgements, abstract, contents) has no page
+% numbers; numbering starts at 1 with the Introduction (\mainmatter resets it)
+\g@addto@macro\frontmatter{\pagenumbering{gobble}}
 \makeatother
 \linespread{0.9}
 %\usepackage{chngcntr}
@@ -63,6 +67,7 @@
 \begin{document}
 
 \frontmatter
+\hypersetup{pageanchor=false}% unnumbered pages get no page links
 % University of Udine logo in the top-right corner of the title page only
 \AddToShipoutPictureFG*{%
   \AtPageUpperLeft{%
@@ -76,11 +81,11 @@ I would like to express my deepest gratitude to my parents Sargis and Narine for
 
 To all those Professors who blessed me with knowledge throughout all these years, all my future achievements are built upon the foundation you provided me with. Eternally grateful to Professor Marco Marini, who instilled in me the passion for Computer Vision and allowed me to work on this project under his supervision.
 
-To all my friends, from back Home and the new ones from Italy. The memories we have built together will never be forgotten. Thanks to all of you for letting me into your worlds, beautiful cultures and allowing me to explore new ways of life. Discovering Italy with you was a blessing. Special thanks to my friend Edgar, who despite being thousands of kilometers away managed to be the anchor I could always rely on all these years.
+To all my friends, from back Home and the new ones found in Italy. The memories we have built together will never be forgotten. Thanks to all of you for letting me into your worlds, beautiful cultures and allowing me to explore new ways of life. Discovering Italy with you was a blessing. Special thanks to my friend Edgar, who despite being thousands of kilometers away managed to be the anchor I could always rely on all these years.
 
 To all those who doubted me, I am grateful for the fuel you provided me to never stop in the face of hardship.
 
-To the Eternal City and to Romans, I could have never chosen a better place to spend my formative years. The character you forced me to develop, the beauty you showed me will stay with me forever.
+To the Eternal City and to the Romans, I could have never chosen a better place to spend my formative years. The character you forced me to develop, the beauty you showed me will stay with me forever.
 
 \bigskip
 % Armenian closing line: "Դեպի նոր հաջողություններ։" (pdfLaTeX has no Armenian
@@ -94,47 +99,74 @@ write your abstract here
 
 \tableofcontents
 
+\hypersetup{pageanchor=true}
 \mainmatter
 \chapter{Introduction}
-\lettrine[lines=2, findent=3pt, nindent=0pt]{I}{}n the frame of astronomical spectroscopy...
+\label{chap:introduction}
+\section{Unmanned Aerial Vehicles and navigation systems}
+\section{Vulnerabilities: jamming, spoofing, signal loss}
+\section{Problem statement and contributions}
+\section{Thesis outline}
 
-\bigskip
-In \hyperref[chap:1]{Chapter~\ref*{chap:1}} we  briefly present...
+\chapter{Background and related work}
+\label{chap:background}
+\section{Feature extraction and matching}
+\section{CNNs and image retrieval}
+\section{Visual odometry and dead reckoning}
+\section{IMU and sensor fusion}
+\section{Related work}
+\section{Autoencoder-based localization (Fabris et al.)}
 
-\bigskip
-In \hyperref[chap:2]{Chapter~\ref*{chap:2}} we summarize...
+\chapter{Data and experimental setup}
+\label{chap:data}
+\section{Orthophotos and real photos}
+\section{Preparing the real photos}
+\section{Flight simulation and on-the-fly augmentations}
+\section{Patch grids and image sizes}
+\section{Evaluation metrics}
 
-\chapter{Near-infrared multi-object spectroscopy}
-\label{chap:1} 
-\section{Scientific Case}
-\label{sec:caso}
-Over the last decades, innovative observational techniques have been developed to allow spectrographs observing...
+\chapter{Visual odometry}
+\label{chap:vo}
+\section{Methodology}
+\section{EfficientLoFTR vs SuperPoint + LightGlue}
+\section{Failure modes and drift}
+\section{Map check: correcting drift against the map}
 
-\chapter{MOONS}
-\label{chap:2}
-\section{The Very Large Telescope}
-Property of the European Southern Observatory...
+\chapter{Relocalization}
+\label{chap:relocalization}
+\section{Why it is needed}
+\section{Fabris's autoencoder with VO}
+\section{Pretrained CNN retrievers}
+\section{Comparison}
 
-\section{The Multi-Object Optical and Near-infrared Spectrograph}
-\label{sec:moons}
+\chapter{Sensor fusion with the EKF}
+\label{chap:ekf}
+\section{Limits of the rule-based pipeline}
+\section{Filter design}
+\section{Simulated IMU (DJI Phantom 4)}
+\section{Results: simulation and real photo flight}
 
-The \textit{Multi-Object Optical and Near-infrared Spectrograph} is a future generation MOS instrument for the VLT. 
+\chapter{Evaluation on real flights}
+\label{chap:evaluation}
+\section{Frozen configuration and protocol}
+\section{Inference on actual flight footages}
+\section{Runtime on the Jetson Orin Nano}
+\section{Discussion}
 
 \chapter{Conclusions}
-The grasping power of the mirror..
+\label{chap:conclusions}
+\section{Main findings}
+\section{Limitations}
+\section{Future work}
 
 \backmatter
 \phantomsection
-\begin{thebibliography}{17}
+\begin{thebibliography}{99}
 
-\bibitem{ref:vph}
-Blanche P.A., Gailly P., et al., “\textit{Volume phase holographic gratings: large size and high diffraction efficiency}“, Optical Engineering, Vol. 43, No.11, November 2004
+% Add references here, e.g.:
+% \bibitem{key} Author A., Author B., ``Title'', Journal/Conference, Year.
 
-\bibitem{ref:science}
-Cirasuolo M., et al., \textit{"MOONS Science Report"}, MOONS Document Number: VLT-TRE-MON-14620-0001, Issue: $1.0$, $31^{\textup{st}}$ January $2013$
-
-\bibitem{ref:eso}
-European Southern Observatory, \url{http://www.eso.org}
+\bibitem{placeholder} References will be added here.
 
 \end{thebibliography}
 
