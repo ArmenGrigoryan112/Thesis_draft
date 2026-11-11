@@ -73,6 +73,8 @@ jobs:
             if [ "$(git rev-parse "${c}^{tree}")" = "$OL_TREE" ]; then SAFE=yes; break; fi
           done
           if [ "$SAFE" != yes ]; then
+            echo "Files that differ between Overleaf and GitHub main (Overleaf -> GitHub):"
+            git diff --stat "$OL_COMMIT" HEAD || true
             echo "::error::Overleaf has edits that are not on GitHub yet. In Overleaf use Menu > GitHub > 'Push Overleaf changes to GitHub' (this re-runs the sync). Overleaf was NOT modified."
             exit 1
           fi

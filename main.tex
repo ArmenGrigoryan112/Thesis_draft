@@ -125,7 +125,7 @@ The initial dataset consisted of six geo-referenced orthophotos and 58 images ta
 
 In his autoencoder, Fabris's team applied a saliency mask on the tiles in order to train the network more efficiently. However, my pipeline does not use the salient/non-salient selection: every patch of the grid enters the database, and the 747 salient patches are only used to reproduce Fabris's method as a baseline. As the on-board map I used the color-corrected version of the original orthophoto, on which Fabris's network was trained. The original orthophoto instead plays the role of the real world: the simulated camera image is cut from it. The on-board map has no usable geo-reference of its own, so the code assumes it sits on the same pixel grid as the original tile. That assumption was measured and holds, with an offset of about 0.02~px. The consequence is that the simulated camera and the map differ in color but are geometrically identical, pixel for pixel. This makes simulated matching easier than reality, where a map and a later flight never line up exactly and it is why simulated fixes can be accurate to a few millimetres when no photometric change is applied. Simulated accuracy should be read as a best case.
 
-The flight photos were during the same flight from which the orthophoto was produced, so the map and the photos show the ground in the same light and season. Before the flight photos could be tested on the pipeline, they required four pre-processing steps:
+The flight photos were taken during the same flight from which the orthophoto was produced, so the map and the photos show the ground in the same light and season. Before the flight photos could be tested on the pipeline, they required four pre-processing steps:
 
 \begin{enumerate}
 \item The flight photos are brought to the map's resolution. A photo's ground size per pixel is its altitude multiplied by the sensor width, divided by the focal length times the image width. Each photo is resized from that value to 0.1~m per pixel, so that photo and map share the same scale and the matcher's scale bounds make sense. Written as a formula, with $h$ the altitude in metres, $w$ the sensor width (6.17~mm), $f$ the focal length (3.61~mm) and $W$ the image width in pixels (4{,}000 for this camera), the ground size of one pixel is
@@ -142,7 +142,7 @@ and the photo is resized by the factor $g / 0.1$. With the median altitude of $h
 \item The photos are put in flight order by capture time, and the gimbal yaw serves as the compass. In flight order they are about 55~m apart (median 54.6~m, maximum 143.5~m). Six of the gaps are longer than 100~m, and the whole path is 3.5~km long. The gimbal yaw stays between $-2.3^\circ$ and $+0.1^\circ$ for the whole flight, so every photo is almost exactly north-up. The real flight photos therefore do not test robustness to rotation, only the simulation does.
 \end{enumerate}
 
-Important caveat of the dataset is that out of the 58 real flight photos, 7 could not be matched to the map even at the correct position. These photos stay in the flight sequence, but at most 51 photos can be found by any retriever at later stages of the pipeline's test runs.
+An important caveat of the dataset is that out of the 58 real flight photos, 7 could not be matched to the map even at the correct position. These photos stay in the flight sequence, but at most 51 photos can be found by any retriever at later stages of the pipeline's test runs.
 
 \section{Flight simulation and on-the-fly augmentations}
 \section{Patch grids and image sizes}
