@@ -73,8 +73,15 @@ jobs:
             if [ "$(git rev-parse "${c}^{tree}")" = "$OL_TREE" ]; then SAFE=yes; break; fi
           done
           if [ "$SAFE" != yes ]; then
-            echo "Files that differ between Overleaf and GitHub main (Overleaf -> GitHub):"
-            git diff --stat "$OL_COMMIT" HEAD || true
+            # Show the edits made in Overleaf, relative to the closest commit on main
+            BEST=""; BESTN=999999999
+            for c in $(git rev-list --max-count=50 HEAD); do
+              n=$(git diff --numstat "$c" "$OL_COMMIT" | awk '{s+=$1+$2} END {print s+0}')
+              if [ "$n" -lt "$BESTN" ]; then BEST=$c; BESTN=$n; fi
+            done
+            echo "Edits in Overleaf that are not on GitHub (compared with main @ $(git rev-parse --short "$BEST")):"
+            git --no-pager diff --stat "$BEST" "$OL_COMMIT" || true
+            git --no-pager diff "$BEST" "$OL_COMMIT" || true
             echo "::error::Overleaf has edits that are not on GitHub yet. In Overleaf use Menu > GitHub > 'Push Overleaf changes to GitHub' (this re-runs the sync). Overleaf was NOT modified."
             exit 1
           fi
