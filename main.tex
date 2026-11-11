@@ -144,7 +144,38 @@ and the photo is resized by the factor $g / 0.1$. With the median altitude of $h
 
 An important caveat of the dataset is that out of the 58 real flight photos, 7 could not be matched to the map even at the correct position. These photos stay in the flight sequence, but at most 51 photos can be found by any retriever at later stages of the pipeline's test runs.
 
-\section{Flight simulation and on-the-fly augmentations}
+\section{Flight simulation and dynamic augmentations}
+\label{sec:simulation}
+The flight simulations have 2 parts: a path and a render of the camera's view along it. The path is a seeded random walk, with each step being 205~px or 20.5~m long. For the visual odometry testing a flight of 512~m was simulated, while for the pipeline testing a flight of 2~km was simulated. In the visual odometry benchmarks there are 2 modes of flight operations: 4-connectivity (vertical, horizontal) and 8-connectivity (vertical, horizontal, diagonal). In order to test the complete pipeline I have used 5 seeds, while for the VO tests I have used 10 seeds per configuration.
+
+Each flight starts at a random position at least 82~m from the edge of the tile, so that every camera crop stays inside the image. The drone starts facing north at its nominal altitude, which is the only pose it is told. In the code this is the attitude matrix $G$ equal to the identity, $G = I$. A straight step moves 20.5~m, so two consecutive images share 80\% of their area. A diagonal step moves 20.5~m along both axes at once, which is 29~m, and the two images then share only 64\% of their area ($0.8 \times 0.8$). A 25-step flight is 512~m with 4-connectivity and about 600~m with 8-connectivity. The smaller overlap is the main reason diagonal paths produce more failed steps.
+
+The camera's current view is generated on the fly. A 1640~px crop of the world orthophoto is cut around the drone's position, rotated by the drone's heading and rescaled by its scale factor. The central $1024 \times 1024$~px images are then kept (102.4~m ground area). This is the final crop dimension used for the pipeline. Generating the initial crop with larger dimensions guarantees that the $1024 \times 1024$~px patch does not have fillers caused by the rotations (blank pixels). Since each step is 20.5~m and the image is 102.4~m wide, consecutive images overlap by 80\%. The augmentations are applied dynamically, on the 1640~px crops as they are being generated, rather than being stored as a dataset. In the testing I have defined 5 conditions:
+
+\begin{enumerate}
+\item \textbf{None}: applies no change and serves as a control.
+\item \textbf{Rotation}: the heading is changed by $[-15^\circ, +15^\circ]$ per image and the changes accumulate over time.
+\item \textbf{Scale}: the scale changes by $[-10\%, +10\%]$ per image, as the altitude varies.
+\item \textbf{Photometric}: the Albumentations library applies color jitter (contrast and brightness changes by $[-30\%, +30\%]$, saturation by $[-20\%, +20\%]$, hue shifts by $[-5\%, +5\%]$), Gaussian noise (standard deviation of $[5\%, 15\%]$ of the intensity range, the same on all three channels) and motion blur (kernel range $[5, 15]$~px).
+\item \textbf{Realistic}: this setting combines all the above mentioned augmentations in order to achieve the most realistic flying conditions.
+\end{enumerate}
+
+The variation in the applied augmentation on the images was created deliberately in order to test how the matchers and retrievers behave given specific test conditions, however all the flights in the final system were run using the `realistic' condition of the augmentations. Each image has its own random seed, derived from the flight seed and the frame number ($\text{seed} \times 1{,}000 + \text{frame}$). The rendered images are also cached, so every method compared on a flight sees exactly the same pixels.
+
+The compass is simulated as the true heading plus Gaussian noise of $3^\circ$. It is not used in visual odometry, rather it is used only to rotate relocalization queries north-up. Having the query image north-up is a required pre-requisite to run the retriever networks, since none of them are rotation-invariant.
+
+Three scenarios test the pipeline:
+
+\begin{enumerate}
+\item \textbf{Long flight}: regular flight sequence, nothing goes wrong.
+\item \textbf{Camera blackout}: simulates conditions of vision loss from the drone. In the final tests, frames 40--51 (12 frames, about 250~m) return nothing to the localizers.
+\item \textbf{Unknown start}: the drone is told a start 200--400~m from the truth in a random direction and does not know it is wrong.
+\end{enumerate}
+
+In the performance comparisons the blackout is placed on a straight leg, while in the EKF testing the blackout is placed both on a straight leg and on a leg with blind turns. In the blackout on a straight leg, the path repeats its last step for the 12 blind frames, so the drone flies about 250~m in one direction. In the unknown start, the direction of the wrong start is drawn uniformly, and its distance uniformly between 200 and 400~m, and the drone's uncertainty is set to infinity, so its first fix has to be a search of the whole map. Fabris's own method, in contrast, is always started from the correct patch when the start is known.
+
+In the EKF testing, the drone flies a smooth curve (cubic spline) through the waypoints at 5~m/s, close to the speed of the real flight (about 50~m between photos, about 12~s apart). That gives one image every 4.1~s, with the IMU sampled at 100~Hz along the same curve. The curve's peak acceleration is checked against what a Phantom~4 can physically do without GPS: in ATTI mode its maximum tilt of $35^\circ$ allows about 6.9~m/s$^2$. The tests give an output with the peak over all simulated paths 5.01~m/s$^2$, which is inside that limit.
+
 \section{Patch grids and image sizes}
 \section{Evaluation metrics}
 
