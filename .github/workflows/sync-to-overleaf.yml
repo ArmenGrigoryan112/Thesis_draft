@@ -73,12 +73,22 @@ jobs:
             if [ "$(git rev-parse "${c}^{tree}")" = "$OL_TREE" ]; then SAFE=yes; break; fi
           done
           if [ "$SAFE" != yes ]; then
-            # Show the edits made in Overleaf, relative to the closest commit on main
+            # Also safe if every Overleaf edit is already contained in main:
+            # merging Overleaf's edits (relative to the closest main commit) into
+            # main must change nothing.
             BEST=""; BESTN=999999999
             for c in $(git rev-list --max-count=50 HEAD); do
               n=$(git diff --numstat "$c" "$OL_COMMIT" | awk '{s+=$1+$2} END {print s+0}')
               if [ "$n" -lt "$BESTN" ]; then BEST=$c; BESTN=$n; fi
             done
+            MERGED=$(git merge-tree --write-tree --merge-base="$BEST" HEAD "$OL_COMMIT" 2>/dev/null | head -1 || true)
+            if [ "$MERGED" = "$GH_TREE" ]; then
+              echo "Overleaf's own edits are already on GitHub main; safe to sync."
+              SAFE=yes
+            fi
+          fi
+          if [ "$SAFE" != yes ]; then
+            # Show the edits made in Overleaf, relative to the closest commit on main
             echo "Edits in Overleaf that are not on GitHub (compared with main @ $(git rev-parse --short "$BEST")):"
             git --no-pager diff --stat "$BEST" "$OL_COMMIT" || true
             git --no-pager diff "$BEST" "$OL_COMMIT" || true
