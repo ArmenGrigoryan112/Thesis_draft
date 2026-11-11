@@ -19,12 +19,13 @@
 %\usepackage{type1cm}
 \usepackage{lettrine}
 \usepackage{eso-pic}
+\usepackage{booktabs}
 
 % Do not print the back of the title page (exam board / copyright page)
 \makeatletter
 \let\SAP@composebacktitlepage\relax
 
-% Front matter (title page, acknowledgements, abstract, contents) has no page
+% Front matter (title page, acknowledgments, abstract, contents) has no page
 % numbers; numbering starts at 1 with the Introduction (\mainmatter resets it)
 \g@addto@macro\frontmatter{\pagenumbering{gobble}}
 \makeatother
@@ -75,7 +76,7 @@
       \makebox[0pt][r]{\raisebox{-\height}{\includegraphics[width=5cm]{images/logo-uniud}}}}}}
 \maketitle
 
-\begin{acknowledgments}[Acknowledgements]
+\begin{acknowledgments}[Acknowledgments]
 \linespread{1.15}\selectfont\setlength{\parskip}{0.8em}%
 I would like to express my deepest gratitude to my parents Sargis and Narine for their unconditional love and support, for providing me with the opportunity to constantly better myself while always being supported and cared for. To my sister Inga who has gone with me through the hardest and most cheerful moments of my life, thank you for looking after me. I strive to be a worthy son to the family, I am truly grateful to all of you.
 
@@ -123,12 +124,12 @@ write your abstract here
 \label{sec:dataset}
 The initial dataset consisted of six geo-referenced orthophotos and 58 images taken from an actual flight sequence provided by the University of Udine, using a DJI Phantom~4 drone (camera FC330). The visual odometry benchmarks were tested on all six orthophotos. The later stages, specifically the autoencoder/CNN retrievers and the EKF, used only one of them, which covers the area of the real flight photos. Each orthophoto has dimensions of $9000 \times 8400$ pixels, with 0.1~m/px giving us an area coverage of $900 \times 840$~m, in the coordinate system EPSG:25833 (ETRS89 / UTM zone 33N).
 
-In his autoencoder, Fabris's team applied a saliency mask on the tiles in order to train the network more efficiently. However, my pipeline does not use the salient/non-salient selection: every patch of the grid enters the database, and the 747 salient patches are only used to reproduce Fabris's method as a baseline. As the on-board map I used the color-corrected version of the original orthophoto, on which Fabris's network was trained. The original orthophoto instead plays the role of the real world: the simulated camera image is cut from it. The on-board map has no usable geo-reference of its own, so the code assumes it sits on the same pixel grid as the original tile. That assumption was measured and holds, with an offset of about 0.02~px. The consequence is that the simulated camera and the map differ in color but are geometrically identical, pixel for pixel. This makes simulated matching easier than reality, where a map and a later flight never line up exactly and it is why simulated fixes can be accurate to a few millimetres when no photometric change is applied. Simulated accuracy should be read as a best case.
+In his autoencoder, Fabris's team applied a saliency mask on the tiles in order to train the network more efficiently. However, my pipeline does not use the salient/non-salient selection: every patch of the grid enters the database, and the 747 salient patches are only used to reproduce Fabris's method as a baseline. As the on-board map I used the color-corrected version of the original orthophoto, on which Fabris's network was trained. The original orthophoto instead plays the role of the real world: the simulated camera image is cut from it. The on-board map has no usable geo-reference of its own, so the code assumes it sits on the same pixel grid as the original tile. That assumption was measured and holds, with an offset of about 0.02~px. The consequence is that the simulated camera and the map differ in color but are geometrically identical, pixel for pixel. This makes simulated matching easier than reality, where a map and a later flight never line up exactly and it is why simulated fixes can be accurate to a few millimeters when no photometric change is applied. Simulated accuracy should be read as a best case.
 
 The flight photos were taken during the same flight from which the orthophoto was produced, so the map and the photos show the ground in the same light and season. Before the flight photos could be tested on the pipeline, they required four pre-processing steps:
 
 \begin{enumerate}
-\item The flight photos are brought to the map's resolution. A photo's ground size per pixel is its altitude multiplied by the sensor width, divided by the focal length times the image width. Each photo is resized from that value to 0.1~m per pixel, so that photo and map share the same scale and the matcher's scale bounds make sense. Written as a formula, with $h$ the altitude in metres, $w$ the sensor width (6.17~mm), $f$ the focal length (3.61~mm) and $W$ the image width in pixels (4{,}000 for this camera), the ground size of one pixel is
+\item The flight photos are brought to the map's resolution. A photo's ground size per pixel is its altitude multiplied by the sensor width, divided by the focal length times the image width. Each photo is resized from that value to 0.1~m per pixel, so that photo and map share the same scale and the matcher's scale bounds make sense. Written as a formula, with $h$ the altitude in meters, $w$ the sensor width (6.17~mm), $f$ the focal length (3.61~mm) and $W$ the image width in pixels (4{,}000 for this camera), the ground size of one pixel is
 \begin{equation}
   g = \frac{h \cdot w}{f \cdot W}
   \label{eq:gsd}
@@ -137,20 +138,49 @@ and the photo is resized by the factor $g / 0.1$. With the median altitude of $h
 
 \item The scale is calibrated once, at the known start. The altitude in the metadata is measured from the take-off point rather than from the ground beneath the drone, so the first resize is slightly off. One map check on the first photo, where the start position is known, measures the remaining scale error, and every photo is corrected by that factor. The calibration found that the images were 1.119 times too large, so after calibration the photos sit about 72.3~m above the ground, and each one covers about $123 \times 92$~m ($1{,}236 \times 927$~px).
 
-\item The offset between GPS and the map is measured without letting any photo grade itself. GPS and the orthophoto disagree by a constant shift of a few metres. A map check on every photo, started 15~m away, measures that shift photo by photo, and the reference position of photo~$i$ is its GPS plus the median shift of the other 57 photos. This construction matters, because a photo scored against its own measurement would make the map check seem perfect. Over all photos, the offset between GPS and the map is 2.40~m to the west and 4.03~m to the south.
+\item The offset between GPS and the map is measured without letting any photo grade itself. GPS and the orthophoto disagree by a constant shift of a few meters. A map check on every photo, started 15~m away, measures that shift photo by photo, and the reference position of photo~$i$ is its GPS plus the median shift of the other 57 photos. This construction matters, because a photo scored against its own measurement would make the map check seem perfect. Over all photos, the offset between GPS and the map is 2.40~m to the west and 4.03~m to the south.
 
 \item The photos are put in flight order by capture time, and the gimbal yaw serves as the compass. In flight order they are about 55~m apart (median 54.6~m, maximum 143.5~m). Six of the gaps are longer than 100~m, and the whole path is 3.5~km long. The gimbal yaw stays between $-2.3^\circ$ and $+0.1^\circ$ for the whole flight, so every photo is almost exactly north-up. The real flight photos therefore do not test robustness to rotation, only the simulation does.
 \end{enumerate}
 
 An important caveat of the dataset is that out of the 58 real flight photos, 7 could not be matched to the map even at the correct position. These photos stay in the flight sequence, but at most 51 photos can be found by any retriever at later stages of the pipeline's test runs.
 
-\section{Flight simulation and dynamic augmentations}
+\section{Flight simulation and data augmentation}
 \label{sec:simulation}
 The flight simulations have 2 parts: a path and a render of the camera's view along it. The path is a seeded random walk, with each step being 205~px or 20.5~m long. For the visual odometry testing a flight of 512~m was simulated, while for the pipeline testing a flight of 2~km was simulated. In the visual odometry benchmarks there are 2 modes of flight operations: 4-connectivity (vertical, horizontal) and 8-connectivity (vertical, horizontal, diagonal). In order to test the complete pipeline I have used 5 seeds, while for the VO tests I have used 10 seeds per configuration.
 
 Each flight starts at a random position at least 82~m from the edge of the tile, so that every camera crop stays inside the image. The drone starts facing north at its nominal altitude, which is the only pose it is told. In the code this is the attitude matrix $G$ equal to the identity, $G = I$. A straight step moves 20.5~m, so two consecutive images share 80\% of their area. A diagonal step moves 20.5~m along both axes at once, which is 29~m, and the two images then share only 64\% of their area ($0.8 \times 0.8$). A 25-step flight is 512~m with 4-connectivity and about 600~m with 8-connectivity. The smaller overlap is the main reason diagonal paths produce more failed steps.
 
-The camera's current view is generated on the fly. A 1640~px crop of the world orthophoto is cut around the drone's position, rotated by the drone's heading and rescaled by its scale factor. The central $1024 \times 1024$~px images are then kept (102.4~m ground area). This is the final crop dimension used for the pipeline. Generating the initial crop with larger dimensions guarantees that the $1024 \times 1024$~px patch does not have fillers caused by the rotations (blank pixels). Since each step is 20.5~m and the image is 102.4~m wide, consecutive images overlap by 80\%. The augmentations are applied dynamically, on the 1640~px crops as they are being generated, rather than being stored as a dataset. In the testing I have defined 5 conditions:
+The camera's current view is generated on the fly. A 1640~px crop of the world orthophoto is cut around the drone's position, rotated by the drone's heading and rescaled by its scale factor. The central $1024 \times 1024$~px images are then kept (102.4~m ground area). This is the final crop dimension used for the pipeline. This size is large enough to contain hundreds of SuperPoint keypoints even over fields, and it matches the size of a real flight photo after resizing (about 1230~px wide). Generating the initial crop with larger dimensions guarantees that the $1024 \times 1024$~px patch does not have fillers caused by the rotations (blank pixels). A 1024~px square rotated by any angle needs a square of $1024 \times \sqrt{2} \approx 1448$~px to stay filled, and at the smallest scale of 0.9 it needs $1448 / 0.9 \approx 1609$~px. The 1640~px crop is the next convenient size above that (8 steps of 205~px). Since each step is 20.5~m and the image is 102.4~m wide, consecutive images overlap by 80\%.
+
+\subsection{Patch grids and image sizes}
+\label{sec:patch-grids}
+Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1{,}054 patches, 747 of which passed his saliency filter. My pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Top-1 and top-5 retrieval accuracy as a function of the offset between the query position and the nearest patch center, against the color-corrected on-board map and the raw orthophoto.}
+  \label{tab:offset-retrieval}
+  \begin{tabular}{rrrrrr}
+    \toprule
+    \multicolumn{2}{c}{Offset} & \multicolumn{2}{c}{Color-corrected map} & \multicolumn{2}{c}{Raw orthophoto} \\
+    \cmidrule(lr){1-2}\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+    px & m & Top-1 & Top-5 & Top-1 & Top-5 \\
+    \midrule
+      0 &  0.0 & 100.0\% & 100.0\% & 76.5\% & 78.5\% \\
+      8 &  0.8 &  99.0\% &  99.0\% & 76.0\% & 80.5\% \\
+     16 &  1.6 &  98.5\% &  99.0\% & 72.0\% & 79.5\% \\
+     32 &  3.2 &  96.0\% &  98.0\% & 48.0\% & 65.5\% \\
+     64 &  6.4 &  37.5\% &  58.0\% &  7.5\% & 14.0\% \\
+     96 &  9.6 &  13.0\% &  25.5\% &  0.5\% &  3.5\% \\
+    128 & 12.8 &   8.5\% &  15.5\% &  0.5\% &  4.5\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Augmentations and test scenarios}
+\label{sec:augmentations}
+The augmentations are applied dynamically, on the 1640~px crops as they are being generated, rather than being stored as a dataset. In the testing I have defined 5 conditions:
 
 \begin{enumerate}
 \item \textbf{None}: applies no change and serves as a control.
@@ -176,7 +206,6 @@ In the performance comparisons the blackout is placed on a straight leg, while i
 
 In the EKF testing, the drone flies a smooth curve (cubic spline) through the waypoints at 5~m/s, close to the speed of the real flight (about 50~m between photos, about 12~s apart). That gives one image every 4.1~s, with the IMU sampled at 100~Hz along the same curve. The curve's peak acceleration is checked against what a Phantom~4 can physically do without GPS: in ATTI mode its maximum tilt of $35^\circ$ allows about 6.9~m/s$^2$. The tests give an output with the peak over all simulated paths 5.01~m/s$^2$, which is inside that limit.
 
-\section{Patch grids and image sizes}
 \section{Evaluation metrics}
 
 \chapter{Visual odometry}
