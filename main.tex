@@ -155,7 +155,7 @@ The camera's current view is generated on the fly. A 1640~px crop of the world o
 
 \subsection{Patch grids and image sizes}
 \label{sec:patch-grids}
-Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1{,}054 patches, 747 of which passed his saliency filter. My pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
+Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1{,}054 patches, 747 of which passed his saliency filter. My pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. Table~\ref{tab:offset-retrieval} shows how quickly retrieval accuracy falls as the query moves away from the nearest patch center: with the color-corrected map, top-1 accuracy stays above 96\% up to an offset of 3.2~m but drops to 37.5\% at 6.4~m. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
 
 \begin{table}[htbp]
   \centering
@@ -207,6 +207,41 @@ In the performance comparisons the blackout is placed on a straight leg, while i
 In the EKF testing, the drone flies a smooth curve (cubic spline) through the waypoints at 5~m/s, close to the speed of the real flight (about 50~m between photos, about 12~s apart). That gives one image every 4.1~s, with the IMU sampled at 100~Hz along the same curve. The curve's peak acceleration is checked against what a Phantom~4 can physically do without GPS: in ATTI mode its maximum tilt of $35^\circ$ allows about 6.9~m/s$^2$. The tests give an output with the peak over all simulated paths 5.01~m/s$^2$, which is inside that limit.
 
 \section{Evaluation metrics}
+\label{sec:metrics}
+The metrics are the core of the evaluation, since they measure the accuracy with which the drone estimates its location in comparison with the reference position (which the drone never sees). The metrics are divided into 4 categories.
+
+\subsection{Odometry and flight accuracy}
+\label{sec:metrics-odometry}
+The final error is how far the estimated position is from the reference at the last image. This is an essential metric for visual odometry, however it can hide a flight that went far off in the middle and came back. That is why the ATE (absolute trajectory error) is reported next to it, the root mean square of the error over all images except the first, which exposes exactly those midflight detours. On one of the tiles, for example, the median final drift was 0.83~m but the median ATE 4.04~m. The maximum error captures the worst moment of the flight, which is what matters during a blackout. The share of images within 5~m of the truth says how much of the flight was usable, and a flight counts as recovered if it ends within 5~m.
+
+With the estimated position $\hat{p}_k$ and the true position $p_k$ at image $k$, and $N$ images after the first, the trajectory error is
+\begin{equation}
+  \mathrm{ATE} = \sqrt{\frac{1}{N}\sum_{k=1}^{N} \lVert \hat{p}_k - p_k \rVert^2}
+  \label{eq:ate}
+\end{equation}
+
+The cause of a failure is found by the VO benchmark, since it also measures each step on its own. The step translation error compares one measured movement with the true movement starting from the keyframe, converted with the true attitude so that it isolates this single measurement. The step rotation error does the same for the measured rotation. The final heading error is how far the tracked heading has drifted by the end of the flight. Three numbers describe the matching itself: the number of matches per step, the inlier ratio (the share of matches that agree with the fitted motion) and the reprojection error of the inliers in pixels. A failed step is one whose measurement was rejected by the 15-inlier or scale rule. Drift is also reported as a percentage of the path length.
+
+\subsection{Retrieval quality}
+\label{sec:metrics-retrieval}
+These metrics measure the extent to which the retriever found the correct location. Recall@$K$, where $K = 1$, 5 and 10, is the share of queries for which one of the top $K$ candidates lies within 18.1~m of the truth. The threshold of 18.1~m is half the diagonal of a 25.6~m cell, so a hit means landing inside the right patch of Fabris's grid. Recall@5 matters most, because the pipeline verifies five candidates. The top-1 error (median and mean) and the share of top-1 candidates within 5, 10, 50 and 100~m describe how far the best guess lands.
+
+Recall alone says nothing about whether the pipeline can use a candidate, so two verification metrics complete the picture. A correct fix means the best LightGlue-verified candidate with at least 50 agreeing matches that lies within 5~m of the truth. If a candidate cannot be verified it is never used. A false fix is a candidate that passed verification while being more than 5~m off, in other words a wrong position accepted as right. Finally, the gate check repeats the verification with minimum-match thresholds from 15 to 150 and reports accepted, correct and false fixes. It shows whether the threshold of 50 is a safe choice.
+
+\subsection{Filter consistency}
+\label{sec:metrics-filter}
+These metrics measure the extent to which the drone is aware of how lost it is. The truth-in-radius share is the fraction of images on which the true position lies inside the search radius, so if the metric scores low, the drone is searching in the wrong area. It is reported for both the rule-based pipeline and the EKF.
+
+The remaining two apply to the EKF only. NEES (normalized estimation error squared) is $e^{\top} P^{-1} e$, where $e$ is the true position error and $P$ the filter's position covariance. For a two-dimensional position its average should be about 2: above 2 the filter is overconfident, below 2 it is too cautious. The share of images with NEES under 5.99 (the 95\% bound) should be about 95\%. The number of fixes rejected by the $\chi^2$ gate shows how often the filter refused a measurement. For image $k$, with the position error $e_k$ and the $2 \times 2$ position block $P_k$ of the filter's covariance,
+\begin{equation}
+  \mathrm{NEES}_k = e_k^{\top} P_k^{-1} e_k, \qquad e_k = \hat{p}_k - p_k
+  \label{eq:nees}
+\end{equation}
+
+\subsection{Speed}
+\label{sec:metrics-speed}
+The speed metrics are the milliseconds per image on a T4 GPU, the fingerprint time per retriever on GPU and CPU, and the database build time and size. The speed table is measured in a fixed way. Twenty map patches are fingerprinted one at a time on the GPU (after a warm-up) and the median time is kept. The same network is then copied to the CPU and timed on five patches. The search time is the cosine comparison plus the selection of ten candidates on the dense grid, averaged over ten repetitions. The table also records each network's parameter count and the size and build time of its two databases.
+
 
 \chapter{Visual odometry}
 \label{chap:vo}
