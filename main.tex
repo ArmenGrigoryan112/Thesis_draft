@@ -245,7 +245,7 @@ The speed metrics are the fingerprint time per retriever on GPU and CPU, the sea
 
 \chapter{Visual odometry}
 \label{chap:vo}
-Visual odometry is the drone's sense of its own motion. Similar to dead reckoning in ship's position estimation through its recorded speed and heading, visual odometry carries the position forward from one image to the next one. The drone only knows where it started and for every new image, it asks how far it moved and how it turned since the last keyframe (good image) and adds that motion to its estimate.
+Visual odometry is the drone's sense of its own motion. Similar to dead reckoning in a ship's position estimation through its recorded speed and heading, visual odometry carries the position forward from one image to the next one. The drone only knows where it started and for every new image, it asks how far it moved and how it turned since the last keyframe (good image) and adds that motion to its estimate.
 
 \section{Methodology}
 \label{sec:vo-method}
@@ -267,15 +267,32 @@ The first is the fitted model, the second is the movement of the drone in keyfra
 
 In order to verify the correctness of the above mentioned formulas' implementation, I have performed checks on three cases with known answers, on images without photometric change (Table~\ref{tab:vo-known-answer}). The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.
 
-% TODO: fill in Table 4.1 (source: VO benchmark notebook, run of 29 September)
 \begin{table}[htbp]
   \centering
-  \caption{Known-answer checks of the odometry step on images without photometric change. Expected answers: 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.}
+  \caption{Known-answer checks of the odometry step on images without photometric change: the expected values and what each matcher measured. Shifts in pixels; inlier ratio: share of matches that agree with the fitted motion. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-known-answer}
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: VO benchmark notebook, run of 29 September).}}
+  \small
+  \begin{tabular}{llrrrrr}
+    \toprule
+     & & Shift & Shift & Rotation & & Inlier \\
+    Test & & east (px) & south (px) & ($^\circ$) & Scale & ratio \\
+    \midrule
+    Moved 205~px east & Expected & 205 & 0 & 0 & 1 & -- \\
+     & SP+LG & 205.012 & $-0.008$ & 0.000 & 1.000 & 0.996 \\
+     & ELoFTR & 208.000 & 0.000 & 0.000 & 1.000 & 1.000 \\
+    \addlinespace
+    Stationary, & Expected & 0 & 0 & $-10$ & 1 & -- \\
+    \quad heading $10^\circ$ & SP+LG & 0.013 & 0.040 & $-9.999$ & 1.000 & 0.994 \\
+     & ELoFTR & 41.772 & 8.283 & $-19.807$ & 1.002 & 0.045 \\
+    \addlinespace
+    Stationary, & Expected & 0 & 0 & 0 & 1.1 & -- \\
+    \quad scale 1.1 & SP+LG & 0.009 & 0.017 & 0.002 & 1.100 & 0.990 \\
+     & ELoFTR & $-1.246$ & 0.106 & 0.147 & 1.100 & 0.496 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-LightGlue recovers all three with an accuracy of at most a few hundredths of a pixel. EfficientLoFTR handles the shift and the scale, but for a pure $10^\circ$ rotation it reports $-19.8^\circ$ and a false shift of 42~px, with under 5\% of its matches agreeing.
+LightGlue recovers all three with an accuracy of at most a few hundredths of a pixel. EfficientLoFTR handles the shift and the scale, but for a pure $-10^\circ$ rotation it reports $-19.8^\circ$ and a false shift of 42~px, with under 5\% of its matches agreeing.
 
 \section{EfficientLoFTR vs SuperPoint + LightGlue}
 \label{sec:vo-matchers}
@@ -311,7 +328,7 @@ Both matchers were given the same images, same estimator, so only the matching d
   \end{tabular}
 \end{table}
 
-The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the matcher itself does not depend on the terrain. As visible from Table~\ref{tab:vo-per-tile}, the tile 06611109 with diagonal movements had the most amount of failed steps, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. Its mean error/drift is 11.3~m although its median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
+The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the matcher itself does not depend on the terrain. As visible from Table~\ref{tab:vo-per-tile}, the tile 06611109 with diagonal movements had the most failed steps, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. Its mean error/drift is 11.3~m although its median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
 
 \begin{table}[htbp]
   \centering
@@ -358,7 +375,7 @@ The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the m
   \end{tabular}
 \end{table}
 
-For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. 3 seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 98\% to 75\% (Table~\ref{tab:vo-ablation}). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
+For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. 3 seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 99\% to 75\% (Table~\ref{tab:vo-ablation}). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
 
 \begin{table}[htbp]
   \centering
@@ -381,7 +398,7 @@ For both of the matchers the performance was also measured for the different aug
   \end{tabular}
 \end{table}
 
-EfficientLoFTR has two separate weaknesses. Rotation alone is catastrophic, since only 6\% of its matches agree and the rotation error causes a drift up to 129~m. Photometric change alone also breaks the matcher in a different way, only 4.5\% of the matches agree. Scale alone is tolerable (8~m), however even with no change it drifts about 2.5~m which is significantly more compared to LightGlue.
+EfficientLoFTR has two separate weaknesses. Rotation alone is catastrophic, since only 6\% of its matches agree and the rotation error causes a drift of 129~m. Photometric change alone also breaks the matcher in a different way, only 4.5\% of the matches agree. Scale alone is tolerable (8~m), however even with no change it drifts about 2.5~m which is significantly more compared to LightGlue.
 
 Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results on a simulated flight. The first one shows one flight (tile 06611109, seed 26, 4-connectivity), with frame-to-frame odometry on the left and matching against the map on the right. The second figure shows what each matcher matched on one step of the simulated flight.
 
@@ -392,7 +409,7 @@ Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results o
   \label{fig:vo-flight}
 \end{figure}
 
-In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue while red denotes the position error of EfficientLoFTR. Clearly, LightGlue follows the true path and ends only 1.0~m off, its error rising slowly with distance reaching a maximum of 1.0~m off. EfficientLoFTR on the other hand leaves the path within the first steps and ends with approximately 54~m off. When each image is matched against the map, LightGlue's error is no longer growing, it stays below 0.5~m and ends 0.3~m off. That is precisely the reason the pipeline uses map checks every once in a while.
+In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue while red denotes the position error of EfficientLoFTR. Clearly, LightGlue follows the true path and ends only 1.0~m off, its error rising slowly with distance reaching a maximum of 1.0~m off. EfficientLoFTR on the other hand leaves the path within the first steps and ends approximately 54~m off. When each image is matched against the map, LightGlue's error is no longer growing, it stays below 0.5~m and ends 0.3~m off. That is precisely the reason the pipeline uses map checks every once in a while.
 
 \begin{figure}[htbp]
   \centering
