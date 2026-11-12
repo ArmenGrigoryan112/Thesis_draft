@@ -21,6 +21,16 @@
 \usepackage{eso-pic}
 \usepackage{amsmath}
 \usepackage{booktabs}
+% Float placement: let figures/tables sit on text pages near where they are
+% discussed instead of collecting on separate float-only pages
+\usepackage[section]{placeins}% floats never drift past the end of their section
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
 
 % Do not print the back of the title page (exam board / copyright page)
 \makeatletter
@@ -158,7 +168,7 @@ The camera's current view is generated on the fly. A 1640~px crop of the world o
 \label{sec:patch-grids}
 Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1{,}054 patches, 747 of which passed his saliency filter. My pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. Table~\ref{tab:offset-retrieval} shows how quickly retrieval accuracy falls as the query moves away from the nearest patch center: with the color-corrected map, top-1 accuracy stays above 96\% up to an offset of 3.2~m but drops to 37.5\% at 6.4~m. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Top-1 and top-5 retrieval accuracy as a function of the offset between the query position and the nearest patch center, against the color-corrected on-board map and the raw orthophoto.}
   \label{tab:offset-retrieval}
@@ -267,7 +277,7 @@ The first is the fitted model, the second is the movement of the drone in keyfra
 
 In order to verify the correctness of the above mentioned formulas' implementation, I have performed checks on three cases with known answers, on images without photometric change (Table~\ref{tab:vo-known-answer}). The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Known-answer checks of the odometry step on images without photometric change: the expected values and what each matcher measured. Shifts in pixels; inlier ratio: share of matches that agree with the fitted motion. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-known-answer}
@@ -300,7 +310,7 @@ The matcher was chosen by the benchmarks. Each one of the six tiles was flown wi
 
 Both matchers were given the same images, same estimator, so only the matching differed. EfficientLoFTR was the pre-trained version from the HuggingFace framework, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results are shown in Table~\ref{tab:vo-pooled}.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Pooled visual odometry benchmark: six tiles, 10 flights of 512~m per tile and configuration (60 flights each), realistic condition. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-pooled}
@@ -330,7 +340,7 @@ Both matchers were given the same images, same estimator, so only the matching d
 
 The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the matcher itself does not depend on the terrain. As visible from Table~\ref{tab:vo-per-tile}, the tile 06611109 with diagonal movements had the most failed steps, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. Its mean error/drift is 11.3~m although its median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Visual odometry results per tile: 10 flights of 512~m per tile and configuration, realistic condition. Conn.: connectivity; step error: median step translation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-per-tile}
@@ -377,7 +387,7 @@ The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the m
 
 For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. 3 seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 99\% to 75\% (Table~\ref{tab:vo-ablation}). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Augmentation ablation on tile 06611109: three flights (seeds 26, 42 and 77) of 25 steps each, 4-connectivity. Drift is the final drift; rot.\ err.: step rotation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-ablation}
@@ -402,18 +412,18 @@ EfficientLoFTR has two separate weaknesses. Rotation alone is catastrophic, sinc
 
 Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results on a simulated flight. The first one shows one flight (tile 06611109, seed 26, 4-connectivity), with frame-to-frame odometry on the left and matching against the map on the right. The second figure shows what each matcher matched on one step of the simulated flight.
 
-\begin{figure}[htbp]
+\begin{figure}[!htbp]
   \centering
-  \includegraphics[width=\textwidth]{images/vo-flight-seed26.jpg}
+  \includegraphics[width=0.85\textwidth]{images/vo-flight-seed26.jpg}
   \caption{One simulated flight (tile 06611109, seed 26, 4-connectivity): trajectories of both matchers and their error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
   \label{fig:vo-flight}
 \end{figure}
 
 In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue while red denotes the position error of EfficientLoFTR. Clearly, LightGlue follows the true path and ends only 1.0~m off, its error rising slowly with distance reaching a maximum of 1.0~m off. EfficientLoFTR on the other hand leaves the path within the first steps and ends approximately 54~m off. When each image is matched against the map, LightGlue's error is no longer growing, it stays below 0.5~m and ends 0.3~m off. That is precisely the reason the pipeline uses map checks every once in a while.
 
-\begin{figure}[htbp]
+\begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.9\textwidth]{images/vo-matches-step.jpg}
+  \includegraphics[width=0.62\textwidth]{images/vo-matches-step.jpg}
   \caption{What each matcher matched on one step with a true rotation of $13.0^\circ$: accepted matches in green, rejected in red. Top: SuperPoint + LightGlue; bottom: EfficientLoFTR.}
   \label{fig:vo-matches}
 \end{figure}
@@ -424,9 +434,9 @@ On this step, with a true rotation of $13.0^\circ$, LightGlue estimated $12.9^\c
 \label{sec:vo-failures}
 The benchmark also revealed how odometry fails. Of the 56 of 1{,}500 failed steps on diagonal paths, 51 were on tile 06611109, whose flights start over fields with rows of nearly identical texture, where matched points are ambiguous. After a failure the drone keeps its last good keyframe, but the gap to it widens with every step, and once the images no longer overlap, odometry has no way of recovering. A flight can also go far off in the middle and come back. On tile 06611116 the median final drift was 0.83~m while the median ATE was 4.04~m, which is why both numbers are reported. Figure~\ref{fig:vo-failed} shows an instance of a failed flight, in which LightGlue ended 81.8~m off the track. Matching against the map cannot rescue this flight either, because once the estimate is more than about 30~m off over repetitive fields, the map crop no longer shows the right place.
 
-\begin{figure}[htbp]
+\begin{figure}[!htbp]
   \centering
-  \includegraphics[width=\textwidth]{images/vo-failed-seed42.jpg}
+  \includegraphics[width=0.85\textwidth]{images/vo-failed-seed42.jpg}
   \caption{A failed flight over fields (tile 06611109, seed 42, 8-connectivity, realistic condition): trajectories and error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
   \label{fig:vo-failed}
 \end{figure}
@@ -447,7 +457,7 @@ Two details complete the description. The crop is centered on the estimate round
 
 The performance change caused by map checks can be observed in Tables~\ref{tab:map-check-sim} and~\ref{tab:map-check-real} (run on 5 simulated flights of each scenario).
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Map check in simulation: visual odometry alone (VO) and with map checks (VO+map), 5 simulated flights of 2~km per scenario. Errors are medians over the flights; within 5~m: share of images within 5~m of the truth; recovered: flights ending within 5~m.}
   \label{tab:map-check-sim}
@@ -470,7 +480,7 @@ The performance change caused by map checks can be observed in Tables~\ref{tab:m
   \end{tabular}
 \end{table}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
   \centering
   \caption{Map check on the real flight photos (58 photos, 3.5~km path): visual odometry alone (VO) and with map checks (VO+map). Within 5~m: share of photos within 5~m of the reference; map fixes: accepted/attempted map checks.}
   \label{tab:map-check-real}
