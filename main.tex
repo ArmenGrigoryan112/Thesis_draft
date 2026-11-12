@@ -19,6 +19,7 @@
 %\usepackage{type1cm}
 \usepackage{lettrine}
 \usepackage{eso-pic}
+\usepackage{amsmath}
 \usepackage{booktabs}
 
 % Do not print the back of the title page (exam board / copyright page)
@@ -226,7 +227,7 @@ The cause of a failure is found by the VO benchmark, since it also measures each
 \label{sec:metrics-retrieval}
 These metrics measure the extent to which the retriever found the correct location. Recall@$K$, where $K = 1$, 5 and 10, is the share of queries for which one of the top $K$ candidates lies within 18.1~m of the truth. The threshold of 18.1~m is half the diagonal of a 25.6~m cell, so a hit means landing inside the right patch of Fabris's grid. Recall@5 matters most, because the pipeline verifies five candidates. The top-1 error (median and mean) and the share of top-1 candidates within 5, 10, 50 and 100~m describe how far the best guess lands.
 
-Recall alone says nothing about whether the pipeline can use a candidate, so two verification metrics complete the picture. A correct fix means the best LightGlue-verified candidate with at least 50 agreeing matches that lies within 5~m of the truth. If a candidate cannot be verified it is never used. A false fix is a candidate that passed verification while being more than 5~m off, in other words a wrong position accepted as right. Finally, the gate check repeats the verification with minimum-match thresholds from 15 to 150 and reports accepted, correct and false fixes. It shows whether the threshold of 50 is a safe choice.
+Recall alone says nothing about whether the pipeline can use a candidate, so two verification metrics complete the picture. A correct fix is a fix whose best LightGlue-verified candidate has at least 50 agreeing matches and lies within 5~m of the truth. If a candidate cannot be verified it is never used. A false fix is a candidate that passed verification while being more than 5~m off, in other words a wrong position accepted as right. Finally, the gate check repeats the verification with minimum-match thresholds from 15 to 150 and reports accepted, correct and false fixes. It shows whether the threshold of 50 is a safe choice.
 
 \subsection{Filter consistency}
 \label{sec:metrics-filter}
@@ -240,15 +241,213 @@ The remaining two apply to the EKF only. NEES (normalized estimation error squar
 
 \subsection{Speed}
 \label{sec:metrics-speed}
-The speed metrics are the milliseconds per image on a T4 GPU, the fingerprint time per retriever on GPU and CPU, and the database build time and size. The speed table is measured in a fixed way. Twenty map patches are fingerprinted one at a time on the GPU (after a warm-up) and the median time is kept. The same network is then copied to the CPU and timed on five patches. The search time is the cosine comparison plus the selection of ten candidates on the dense grid, averaged over ten repetitions. The table also records each network's parameter count and the size and build time of its two databases.
-
+The speed metrics are the fingerprint time per retriever on GPU and CPU, the search time on the dense grid, and the database build time and size. They are collected in the speed table of Section~\ref{sec:reloc-comparison}, which is measured in a fixed way. Twenty map patches are fingerprinted one at a time on the GPU (after a warm-up) and the median time is kept. The same network is then copied to the CPU and timed on five patches. The search time is the cosine comparison plus the selection of ten candidates on the dense grid, averaged over ten repetitions. The table also records each network's parameter count and the size and build time of its two databases. Because a short timing test can differ from the time measured during a long run, the GPU fingerprint time is also reported as the median over all queries of the retrieval benchmark.
 
 \chapter{Visual odometry}
 \label{chap:vo}
+Visual odometry is the drone's sense of its own motion. Similar to dead reckoning in ship's position estimation through its recorded speed and heading, visual odometry carries the position forward from one image to the next one. The drone only knows where it started and for every new image, it asks how far it moved and how it turned since the last keyframe (good image) and adds that motion to its estimate.
+
 \section{Methodology}
+\label{sec:vo-method}
+Since the camera looks straight down at the ground that is roughly flat, between two images the view can only slide, rotate and change scale (when the altitude changes). Tilt and perspective effects are negligible. Every correct pair of matched points must therefore obey a single rule with four unknowns, a 4-degree-of-freedom similarity transform, otherwise known as 4-DOF.
+
+As described in Section~\ref{sec:simulation}, the overlap between two consecutive images was set to 80\%, meaning visual matchers had reliable room to detect the movement between 2 frames. Each step works as follows. SuperPoint, a CNN, detects up to 2048 keypoints in each image by detecting the distinct features in the frame and describes each one of those keypoints with a vector. LightGlue, an attention-based matcher, pairs the keypoints generated by SuperPoint in the given pair of images. RANSAC then finds the similarity hidden among the matches by repeatedly taking 2 random pairs, computes the rule they imply and counts how many other pairs agree within 5~px, for 50{,}000 iterations. The rule with the highest amount of agreeing pairs (inliers) wins. The step is accepted only if at least 15 pairs agree and the scale change lies between 0.5 and 2, since a drone cannot halve or double its altitude between two images. Both SuperPoint and LightGlue are used with their pre-trained weights and the similarity is fitted with OpenCV's \texttt{estimateAffinePartial2D}, which estimates exactly these four parameters. Two pairs are enough to define a similarity, so a model supported by only a handful of pairs can arise by chance; requiring at least 15 agreeing pairs rules that out.
+
+Since the camera looks straight down, the center of each image is the point directly beneath the drone, so the drone's movement is where the center of the new image lies in the keyframe, relative to the keyframe's center: $d = A^{-1}(c - t) - c$, with $c$ the image center. The drone therefore keeps a running attitude $G$ (scale and rotation from map to image) and converts the movement into map directions before adding it, $P \leftarrow P + G^{-1} d$. It then updates the attitude with the rotation just measured, $G \leftarrow A\,G$. The new image becomes the keyframe.
+
+When a step fails, the drone keeps track of its last estimate and last good keyframe, comparing the new image to the latest valid keyframe. To make sure no ground truth leaks into this estimate, the code was tested with a matcher that returns no matches, and the estimate never left the start.
+
+The step can be described using the following formulas:
+\begin{align}
+  p_{\mathrm{new}} &= A\,p_{\mathrm{key}} + t, \qquad A = s\,R(\theta) \label{eq:vo-model}\\
+  d &= A^{-1}(c - t) - c \label{eq:vo-move}\\
+  P &\leftarrow P + G^{-1} d, \qquad G \leftarrow A\,G \label{eq:vo-update}
+\end{align}
+The first is the fitted model, the second is the movement of the drone in keyframe pixels and the third is the update of position and attitude.
+
+In order to verify the correctness of the above mentioned formulas' implementation, I have performed checks on three cases with known answers, on images without photometric change (Table~\ref{tab:vo-known-answer}). The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.
+
+% TODO: fill in Table 4.1 (source: VO benchmark notebook, run of 29 September)
+\begin{table}[htbp]
+  \centering
+  \caption{Known-answer checks of the odometry step on images without photometric change. Expected answers: 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.}
+  \label{tab:vo-known-answer}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: VO benchmark notebook, run of 29 September).}}
+\end{table}
+
+LightGlue recovers all three with an accuracy of at most a few hundredths of a pixel. EfficientLoFTR handles the shift and the scale, but for a pure $10^\circ$ rotation it reports $-19.8^\circ$ and a false shift of 42~px, with under 5\% of its matches agreeing.
+
 \section{EfficientLoFTR vs SuperPoint + LightGlue}
+\label{sec:vo-matchers}
+The matcher was chosen by the benchmarks. Each one of the six tiles was flown with 10 seeds, two matchers and two path types (4- and 8-connectivity, described in Section~\ref{sec:simulation}), giving 240 flights of 512~m in the realistic condition. SuperPoint + LightGlue was accurate at every level: each step was off by about 27~cm and $0.04^\circ$. At the flown distance, the median final drift was 0.64~m with 4-connectivity, about 1~m per 800~m flown, and 0.89~m with 8-connectivity. EfficientLoFTR on the other hand, as a detector-free transformer-based matcher, produced about four times more matches, but only about 2\% of them agreed with a single motion, whereas with LightGlue this metric was at 74\%. EfficientLoFTR's rotation error was about $6.5^\circ$ per step accumulated in the stored heading, so every later movement was added in the wrong direction, resulting in the drone getting lost. Many matches are worthless if they do not agree with one motion and a rotation error is far more significant than a shift error, because it bends the whole remaining path.
+
+Both matchers were given the same images, same estimator, so only the matching differed. EfficientLoFTR was the pre-trained version from the HuggingFace framework, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results are shown in Table~\ref{tab:vo-pooled}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Pooled visual odometry benchmark: six tiles, 10 flights of 512~m per tile and configuration (60 flights each), realistic condition. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \label{tab:vo-pooled}
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+     & \multicolumn{2}{c}{4-connectivity} & \multicolumn{2}{c}{8-connectivity} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}
+    Metric & SP+LG & ELoFTR & SP+LG & ELoFTR \\
+    \midrule
+    Final drift, median (m) & 0.64 & 82.28 & 0.89 & 84.24 \\
+    Final drift, mean (m) & 0.82 & 91.00 & 3.44 & 88.03 \\
+    Final drift, std (m) & 0.61 & 53.27 & 11.34 & 54.54 \\
+    Drift (\% of path) & 0.12 & 16.05 & 0.15 & 14.30 \\
+    ATE, median (m) & 0.57 & 61.33 & 0.68 & 59.63 \\
+    ATE, mean (m) & 1.21 & 66.02 & 4.08 & 66.59 \\
+    Step translation error, median (m) & 0.27 & 5.38 & 0.28 & 5.46 \\
+    Step rotation error ($^\circ$) & 0.04 & 6.51 & 0.04 & 6.62 \\
+    Final heading error ($^\circ$) & 0.27 & 30.53 & 0.28 & 27.14 \\
+    Matches per step & 694 & 2958 & 635 & 2939 \\
+    Inlier ratio & 0.738 & 0.021 & 0.719 & 0.019 \\
+    Reprojection error (px) & 2.34 & 2.92 & 2.34 & 2.91 \\
+    Failed steps & 11/1500 & 609/1500 & 56/1500 & 583/1500 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The error of a single step is nearly the same everywhere, 0.26--0.29~m, so the matcher itself does not depend on the terrain. As visible from Table~\ref{tab:vo-per-tile}, the tile 06611109 with diagonal movements had the most amount of failed steps, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. Its mean error/drift is 11.3~m although its median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Visual odometry results per tile: 10 flights of 512~m per tile and configuration, realistic condition. Conn.: connectivity; step error: median step translation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \label{tab:vo-per-tile}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{llcrrrrrr}
+    \toprule
+     & & & \multicolumn{2}{c}{Final drift (m)} & ATE (m) & Step & Inlier & Failed \\
+    \cmidrule(lr){4-5}
+    Tile & Method & Conn. & median & mean & median & error (m) & ratio & steps \\
+    \midrule
+    06611109 & SP+LG & 4 & 0.72 & 1.05 & 0.63 & 0.28 & 0.729 & 1/250 \\
+     & ELoFTR & 4 & 69.04 & 83.68 & 45.83 & 5.17 & 0.021 & 68/250 \\
+     & SP+LG & 8 & 1.37 & 11.26 & 4.95 & 0.29 & 0.601 & 51/250 \\
+     & ELoFTR & 8 & 50.55 & 64.01 & 47.27 & 4.98 & 0.023 & 129/250 \\
+    \addlinespace
+    06611110 & SP+LG & 4 & 0.72 & 0.84 & 0.51 & 0.27 & 0.779 & 0/250 \\
+     & ELoFTR & 4 & 88.77 & 76.39 & 50.19 & 6.07 & 0.015 & 51/250 \\
+     & SP+LG & 8 & 0.73 & 0.75 & 0.49 & 0.27 & 0.779 & 0/250 \\
+     & ELoFTR & 8 & 104.70 & 94.66 & 83.70 & 6.69 & 0.017 & 65/250 \\
+    \addlinespace
+    06611112 & SP+LG & 4 & 0.60 & 0.79 & 0.52 & 0.27 & 0.725 & 0/250 \\
+     & ELoFTR & 4 & 78.75 & 96.30 & 61.83 & 5.06 & 0.021 & 95/250 \\
+     & SP+LG & 8 & 0.97 & 1.00 & 0.71 & 0.27 & 0.726 & 1/250 \\
+     & ELoFTR & 8 & 77.88 & 89.17 & 55.44 & 5.06 & 0.020 & 93/250 \\
+    \addlinespace
+    06611113 & SP+LG & 4 & 0.44 & 0.48 & 0.38 & 0.27 & 0.757 & 0/250 \\
+     & ELoFTR & 4 & 84.97 & 98.08 & 64.67 & 5.38 & 0.020 & 130/250 \\
+     & SP+LG & 8 & 0.52 & 0.78 & 0.56 & 0.28 & 0.769 & 0/250 \\
+     & ELoFTR & 8 & 106.85 & 99.14 & 66.73 & 5.67 & 0.016 & 109/250 \\
+    \addlinespace
+    06611114 & SP+LG & 4 & 0.70 & 0.70 & 0.51 & 0.27 & 0.767 & 1/250 \\
+     & ELoFTR & 4 & 81.83 & 84.40 & 66.19 & 5.01 & 0.019 & 97/250 \\
+     & SP+LG & 8 & 1.08 & 0.99 & 0.64 & 0.28 & 0.760 & 1/250 \\
+     & ELoFTR & 8 & 70.59 & 90.10 & 46.40 & 4.89 & 0.017 & 60/250 \\
+    \addlinespace
+    06611116 & SP+LG & 4 & 0.83 & 1.06 & 4.04 & 0.26 & 0.672 & 9/250 \\
+     & ELoFTR & 4 & 107.28 & 107.16 & 81.37 & 6.40 & 0.028 & 168/250 \\
+     & SP+LG & 8 & 1.17 & 5.83 & 0.84 & 0.28 & 0.680 & 3/250 \\
+     & ELoFTR & 8 & 67.92 & 91.09 & 55.01 & 4.97 & 0.022 & 127/250 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. 3 seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 98\% to 75\% (Table~\ref{tab:vo-ablation}). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Augmentation ablation on tile 06611109: three flights (seeds 26, 42 and 77) of 25 steps each, 4-connectivity. Drift is the final drift; rot.\ err.: step rotation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \label{tab:vo-ablation}
+  \small
+  \begin{tabular}{lrrrrrrrr}
+    \toprule
+     & \multicolumn{4}{c}{SP+LG} & \multicolumn{4}{c}{ELoFTR} \\
+    \cmidrule(lr){2-5}\cmidrule(lr){6-9}
+    Condition & Drift & Inlier & Rot.\ err. & Failed & Drift & Inlier & Rot.\ err. & Failed \\
+     & (m) & ratio & ($^\circ$) & steps & (m) & ratio & ($^\circ$) & steps \\
+    \midrule
+    None & 0.05 & 0.988 & 0.003 & 0/75 & 2.54 & 0.895 & 0.000 & 0/75 \\
+    Rotation & 0.11 & 0.986 & 0.004 & 0/75 & 129.17 & 0.061 & 7.726 & 7/75 \\
+    Scale & 0.03 & 0.984 & 0.002 & 0/75 & 8.25 & 0.539 & 0.044 & 0/75 \\
+    Photometric & 0.97 & 0.754 & 0.033 & 0/75 & 25.99 & 0.045 & 0.209 & 11/75 \\
+    Realistic & 0.96 & 0.730 & 0.037 & 0/75 & 54.01 & 0.017 & 4.940 & 16/75 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+EfficientLoFTR has two separate weaknesses. Rotation alone is catastrophic, since only 6\% of its matches agree and the rotation error causes a drift up to 129~m. Photometric change alone also breaks the matcher in a different way, only 4.5\% of the matches agree. Scale alone is tolerable (8~m), however even with no change it drifts about 2.5~m which is significantly more compared to LightGlue.
+
+Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results on a simulated flight. The first one shows one flight (tile 06611109, seed 26, 4-connectivity), with frame-to-frame odometry on the left and matching against the map on the right. The second figure shows what each matcher matched on one step of the simulated flight.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{images/vo-flight-seed26.jpg}
+  \caption{One simulated flight (tile 06611109, seed 26, 4-connectivity): trajectories of both matchers and their error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
+  \label{fig:vo-flight}
+\end{figure}
+
+In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue while red denotes the position error of EfficientLoFTR. Clearly, LightGlue follows the true path and ends only 1.0~m off, its error rising slowly with distance reaching a maximum of 1.0~m off. EfficientLoFTR on the other hand leaves the path within the first steps and ends with approximately 54~m off. When each image is matched against the map, LightGlue's error is no longer growing, it stays below 0.5~m and ends 0.3~m off. That is precisely the reason the pipeline uses map checks every once in a while.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/vo-matches-step.jpg}
+  \caption{What each matcher matched on one step with a true rotation of $13.0^\circ$: accepted matches in green, rejected in red. Top: SuperPoint + LightGlue; bottom: EfficientLoFTR.}
+  \label{fig:vo-matches}
+\end{figure}
+
+On this step, with a true rotation of $13.0^\circ$, LightGlue estimated $12.9^\circ$ with 317/494 matches accepted, while EfficientLoFTR estimated $27.1^\circ$ with 15/1{,}729 accepted.
+
 \section{Failure modes and drift}
-\section{Map check: correcting drift against the map}
+\label{sec:vo-failures}
+The benchmark also revealed how odometry fails. Of the 56 of 1{,}500 failed steps on diagonal paths, 51 were on tile 06611109, whose flights start over fields with rows of nearly identical texture, where matched points are ambiguous. After a failure the drone keeps its last good keyframe, but the gap to it widens with every step, and once the images no longer overlap, odometry has no way of recovering. A flight can also go far off in the middle and come back. On tile 06611116 the median final drift was 0.83~m while the median ATE was 4.04~m, which is why both numbers are reported. Figure~\ref{fig:vo-failed} shows an instance of a failed flight, in which LightGlue ended 81.8~m off the track. Matching against the map cannot rescue this flight either, because once the estimate is more than about 30~m off over repetitive fields, the map crop no longer shows the right place.
+
+% TODO: add the figure file (recent_img_1.png)
+\begin{figure}[htbp]
+  \centering
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Figure to be added (recent\_img\_1.png).}}
+  \caption{A failed flight over fields (seed 42, 8-connectivity, realistic condition).}
+  \label{fig:vo-failed}
+\end{figure}
+
+This leads to two conclusions about visual odometry:
+\begin{enumerate}
+\item Odometry is accurate locally but accumulates drift and cannot recover from a failure by itself. Matching against the map removes that drift, so the pipeline needs map checks, and, for an estimate that is already too far off, relocalization.
+\item EfficientLoFTR should be dropped in favor of SuperPoint + LightGlue in later experiments and in the final system.
+\end{enumerate}
+
+\section{Map checks}
+\label{sec:map-check}
+Visual odometry measures change, but the drone carries a map which gives the absolute position. It asks whether the current image matches the map at the place where the drone believes it is, and if so, where exactly. The map check is run every 5th image and in cases where the odometry fails. Checking more often would cost time for no gain. It cuts a 1024~px piece of the onboard map, north-up centered on the estimated location. Since SuperPoint + LightGlue is not rotation-invariant, the images have to look the same way so the image is de-rotated and rescaled with the drone's current attitude $G$. LightGlue then matches the map crop with the de-rotated and rescaled image, and RANSAC fits the same kind of similarity as in odometry, from map to camera.
+
+In map checks the acceptance rules are stricter than in VO: at least 50 pairs must agree, the scale must lie between 0.67 and 1.5 since the altitude is known and the image is brought to map scale. When the fix is accepted, the position becomes crop center + measured offset, $G$ the measured transform. Both position error and heading error are therefore removed at once. The check can only work if the true view still overlaps the crop which holds while the estimate is within about 30~m of the truth.
+
+Two details complete the description. The crop is centered on the estimate rounded to a whole pixel. LightGlue works on the de-rotated image, but the matched points are converted back to the raw camera image with $G$ before RANSAC runs, so the fitted transform is the full map-to-camera attitude and replaces $G$ directly.
+
+The performance change caused by map checks can be observed in Tables~\ref{tab:map-check-sim} and~\ref{tab:map-check-real} (run on 5 simulated flights of each scenario).
+
+% TODO: fill in Table 4.5 (source: cmp_nav_pooled_20261105_0003.csv, rows VO and VO+map only)
+\begin{table}[htbp]
+  \centering
+  \caption{Map check in simulation: visual odometry alone (VO) and with map checks (VO+map), 5 simulated flights per scenario.}
+  \label{tab:map-check-sim}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_nav\_pooled\_20261105\_0003.csv, rows VO and VO+map).}}
+\end{table}
+
+% TODO: fill in Table 4.6 (source: cmp_real_sequence_20261105_0003.csv, rows VO and VO+map only)
+\begin{table}[htbp]
+  \centering
+  \caption{Map check on the real flight photos: visual odometry alone (VO) and with map checks (VO+map).}
+  \label{tab:map-check-real}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_real\_sequence\_20261105\_0003.csv, rows VO and VO+map).}}
+\end{table}
+
+Clearly, on a normal flight it removes the drift almost entirely: the drone ends a median 0.18~m from the truth after 2~km and its largest error is a median 0.74~m, so relocalization is never needed. Tested alone on the real photos from 15~m off, it located 51 of 58 photos with a median error of 1.2~m. It cannot, however, bring back a drone that is already far off. After the blackout the estimate is about 250~m behind, so the map crop shows the wrong place and almost every check fails, and only one of the five flights recovers. With a wrong start it never succeeds at all. On the real photos only 7 of 25 attempts succeeded, because after each long gap the estimate was too far off. The map check therefore keeps a drone on track but cannot find a lost one and that gap is filled by relocalization.
 
 \chapter{Relocalization}
 \label{chap:relocalization}
@@ -256,6 +455,7 @@ The speed metrics are the milliseconds per image on a T4 GPU, the fingerprint ti
 \section{Fabris's autoencoder with VO}
 \section{Pretrained CNN retrievers}
 \section{Comparison}
+\label{sec:reloc-comparison}
 
 \chapter{Sensor fusion with the EKF}
 \label{chap:ekf}
