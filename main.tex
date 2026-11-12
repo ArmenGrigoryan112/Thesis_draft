@@ -407,11 +407,10 @@ On this step, with a true rotation of $13.0^\circ$, LightGlue estimated $12.9^\c
 \label{sec:vo-failures}
 The benchmark also revealed how odometry fails. Of the 56 of 1{,}500 failed steps on diagonal paths, 51 were on tile 06611109, whose flights start over fields with rows of nearly identical texture, where matched points are ambiguous. After a failure the drone keeps its last good keyframe, but the gap to it widens with every step, and once the images no longer overlap, odometry has no way of recovering. A flight can also go far off in the middle and come back. On tile 06611116 the median final drift was 0.83~m while the median ATE was 4.04~m, which is why both numbers are reported. Figure~\ref{fig:vo-failed} shows an instance of a failed flight, in which LightGlue ended 81.8~m off the track. Matching against the map cannot rescue this flight either, because once the estimate is more than about 30~m off over repetitive fields, the map crop no longer shows the right place.
 
-% TODO: add the figure file (recent_img_1.png)
 \begin{figure}[htbp]
   \centering
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Figure to be added (recent\_img\_1.png).}}
-  \caption{A failed flight over fields (seed 42, 8-connectivity, realistic condition).}
+  \includegraphics[width=\textwidth]{images/vo-failed-seed42.jpg}
+  \caption{A failed flight over fields (tile 06611109, seed 42, 8-connectivity, realistic condition): trajectories and error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
   \label{fig:vo-failed}
 \end{figure}
 
@@ -431,20 +430,43 @@ Two details complete the description. The crop is centered on the estimate round
 
 The performance change caused by map checks can be observed in Tables~\ref{tab:map-check-sim} and~\ref{tab:map-check-real} (run on 5 simulated flights of each scenario).
 
-% TODO: fill in Table 4.5 (source: cmp_nav_pooled_20261105_0003.csv, rows VO and VO+map only)
 \begin{table}[htbp]
   \centering
-  \caption{Map check in simulation: visual odometry alone (VO) and with map checks (VO+map), 5 simulated flights per scenario.}
+  \caption{Map check in simulation: visual odometry alone (VO) and with map checks (VO+map), 5 simulated flights of 2~km per scenario. Errors are medians over the flights; within 5~m: share of images within 5~m of the truth; recovered: flights ending within 5~m.}
   \label{tab:map-check-sim}
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_nav\_pooled\_20261105\_0003.csv, rows VO and VO+map).}}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{llrrrrrr}
+    \toprule
+     & & Final & ATE & Max & Within & Re- & ms per \\
+    Scenario & Mode & error (m) & (m) & error (m) & 5~m (\%) & covered & image \\
+    \midrule
+    Long flight & VO & 1.57 & 1.65 & 3.18 & 99.8 & 5/5 & 274 \\
+     & VO+map & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 335 \\
+    \addlinespace
+    Camera blackout & VO & 228.03 & 193.90 & 340.11 & 39.4 & 0/5 & 235 \\
+     & VO+map & 175.20 & 194.90 & 340.94 & 44.8 & 1/5 & 385 \\
+    \addlinespace
+    Unknown start & VO & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 271 \\
+     & VO+map & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 328 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-% TODO: fill in Table 4.6 (source: cmp_real_sequence_20261105_0003.csv, rows VO and VO+map only)
 \begin{table}[htbp]
   \centering
-  \caption{Map check on the real flight photos: visual odometry alone (VO) and with map checks (VO+map).}
+  \caption{Map check on the real flight photos (58 photos, 3.5~km path): visual odometry alone (VO) and with map checks (VO+map). Within 5~m: share of photos within 5~m of the reference; map fixes: accepted/attempted map checks.}
   \label{tab:map-check-real}
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_real\_sequence\_20261105\_0003.csv, rows VO and VO+map).}}
+  \small
+  \begin{tabular}{lrrrrrr}
+    \toprule
+     & Final & ATE & Max & Within & Map & \\
+    Mode & error (m) & (m) & error (m) & 5~m (\%) & fixes & ms/image \\
+    \midrule
+    VO & 588.54 & 224.44 & 638.28 & 6.9 & 0/0 & 207 \\
+    VO+map & 553.67 & 211.42 & 611.92 & 44.8 & 7/25 & 317 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 Clearly, on a normal flight it removes the drift almost entirely: the drone ends a median 0.18~m from the truth after 2~km and its largest error is a median 0.74~m, so relocalization is never needed. Tested alone on the real photos from 15~m off, it located 51 of 58 photos with a median error of 1.2~m. It cannot, however, bring back a drone that is already far off. After the blackout the estimate is about 250~m behind, so the map crop shows the wrong place and almost every check fails, and only one of the five flights recovers. With a wrong start it never succeeds at all. On the real photos only 7 of 25 attempts succeeded, because after each long gap the estimate was too far off. The map check therefore keeps a drone on track but cannot find a lost one and that gap is filled by relocalization.
