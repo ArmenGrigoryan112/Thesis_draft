@@ -312,7 +312,7 @@ Both matchers were given the same images and the same estimator, so only the mat
 
 \begin{table}[!htbp]
   \centering
-  \caption{Pooled visual odometry benchmark: six tiles, 10 flights of 512~m per tile and configuration (60 flights each), realistic condition. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Pooled visual odometry benchmark: six tiles, 10 flights of 25 steps per tile and configuration (60 flights each; 512~m with 4-connectivity, about 600~m with 8-connectivity), realistic condition. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-pooled}
   \small
   \begin{tabular}{lrrrr}
@@ -342,7 +342,7 @@ For SuperPoint + LightGlue, the error of a single step is nearly the same on eve
 
 \begin{table}[!htbp]
   \centering
-  \caption{Visual odometry results per tile: 10 flights of 512~m per tile and configuration, realistic condition. Conn.: connectivity; step error: median step translation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Visual odometry results per tile: 10 flights of 25 steps (512~m with 4-connectivity, about 600~m with 8-connectivity) per tile and configuration, realistic condition. Conn.: connectivity; step error: median step translation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
   \label{tab:vo-per-tile}
   \small
   \setlength{\tabcolsep}{4pt}
