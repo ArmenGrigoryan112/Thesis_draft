@@ -170,7 +170,7 @@ Besides the 1024~px camera image, the system uses one more image size. The datab
 
 \begin{table}[!htbp]
   \centering
-  \caption{Top-1 and top-5 retrieval accuracy as a function of the offset between the query position and the nearest patch center, against the color-corrected on-board map and the raw orthophoto.}
+  \caption{Offset tolerance of Fabris's autoencoder: top-1 and top-5 rate of finding the nearest patch for crops cut at a given offset from the patch center (200 patches per offset, no rotation or scale change), on the color-corrected on-board map and on the raw orthophoto.}
   \label{tab:offset-retrieval}
   \begin{tabular}{rrrrrr}
     \toprule
@@ -501,10 +501,320 @@ Clearly, on a normal flight it removes the drift almost entirely: the drone ends
 \chapter{Relocalization}
 \label{chap:relocalization}
 \section{Why it is needed}
+\label{sec:reloc-why}
+Even though the upgrade of the initial pure visual odometry with map checks increases the likelihood of the drone geo-localizing itself accurately, there are still situations where the odometry can fail: a camera blackout (fog, glare, a covered lens, a jammed video link), a break in the odometry across a long gap between images, or a wrong start. When that happens, a big gap is left in the estimate of the position, leading to a potentially unrecoverable drift in the drone's position estimates. To address these issues, the system needs a complete relocalization through the means of analyzing the whole map, or at least a large area. The problem not only requires an accurate estimate, but also a solution that would be reasonable to execute on a drone that needs relocalization in real time.
+
+Checking every place on the map with LightGlue would take minutes. Each patch of the map is summarized before the flight by a fingerprint vector and during the flight, the current image's fingerprint is compared with all of them within milliseconds, so that only a few most similar places need checking with LightGlue.
+
+To decide when to run the relocalization sequence, the drone keeps an uncertainty value $r$, which denotes how far off it believes it could be. It starts at 1~m with a known start and at infinity in case where it does not know at which point it started. It grows by 1~m for every successful odometry step and by 25~m (about 1.2 times the 20.5~m step, an upper bound on how far the drone can move in one frame) for every image without measurement, either a blackout or a failed odometry step, and it returns to 1~m after any accepted fix. On every 5th image or when odometry fails the value of $r$ is checked: if it is at most 30~m a map check is performed, if the value is larger a relocalization is performed. If a map check fails while odometry worked, the drone waits for the next scheduled fix. If odometry also failed, or it is the second failed map check in a row, the estimate is no longer trusted: $r$ is set to 60~m and a relocalization sequence is run on the same image.
+
+For a more vivid example, let us walk through a blackout scenario: imagine during a test run the drone encounters 12 blind frames, so nothing can be measured. The uncertainty grows to about 300~m. When the camera returns, the keyframe is still the last image from before the blackout, about 250~m behind. So the odometry finds no overlap and fails. The uncertainty is above 30~m, so the relocalization sequence is attempted within the uncertainty radius. It succeeds, the position and the attitude are replaced, the image becomes the new keyframe and odometry resumes on the next frame. The drone is therefore back on track at the first image after the blackout, which is what the results show.
+
+The relocalization sequence itself works the same way for every retriever. The query is the camera image de-rotated with the compass heading and the current scale estimate, and its central 512~px is kept, which corresponds to the map patch dimensions. Instead of using the tracked heading, which most likely is wrong due to loss in camera footage, the compass of the drone is used. The query's fingerprint is compared with every patch fingerprint by cosine similarity. The 5 most similar places are taken, each at least 25.6~m from the others so that they are five different places rather than five neighboring patches of the same place. At first, they are drawn within $r + 51.2$~m of the estimate and if none of them pass, five new ones are drawn from the whole map. Each candidate is verified with a full map check centered on it, using the same 50-match rule. The candidate with the most agreeing pairs wins. The retriever only proposes the patches and LightGlue decides which ones are valid.
+
 \section{Fabris's autoencoder with VO}
+\label{sec:reloc-ae}
+The autoencoder proposed by Fabris takes a 512~px patch with six channels: three color channels, Sobel edge magnitude, Harris corner response and Canny edge strength. Four strided convolutional layers and one linear layer compress it into a 2048-number fingerprint for 269 million parameters in total, almost all of them in the final linear layer. Fabris's approach was to localize each image independently, by taking the top-1 patch among the 747 previously identified salient patches of the 25.6~m grid and using that patch's center as the position, searching $\pm 2$ grid cells around the previous match first when that match was confident (requires a similarity of at least 0.35).
+
+In my relocalization pipeline, Fabris's autoencoder is used exactly as it is: using the same weights, patches, locations. The construction is the following: four convolutions have $3 \times 3$ kernels and a stride of 2, with 64, 128, 128, 128 channels and a ReLU after each. Each one of those halves the image, turning the 512~px into a 32~px image. Thus $128 \times 32 \times 32 = 131{,}072$ values are mapped by the linear layer onto 2048. The Harris channel is rescaled to the range 0--1 separately for each image. The sixth channel is the Canny edge-strength map. Processing the patches in batches was checked to give the same fingerprints as processing them one by one, with cosine similarity of 1.
+
+The autoencoder had to be reproduced true to his thesis, in order to test its performance fairly. On his own test crops, our code reached 68.4\% top-1 and 84.2\% top-5, against the 71\% and 88\% reported in his thesis, meaning the encoder is reproduced correctly.\footnote{Source: \texttt{diag\_fabris\_test\_20261030\_2046.csv}.}
+
+However, on the real photos the autoencoder found the right patch only about 5\% of the time with his grid. The reason behind the seeming underperformance is the test crops themselves: the centers of the crops lie a median 1.4~m from the patch center, while the centers of the real photos lie a median of 10.8~m from the nearest patch center. The shift table (Table~\ref{tab:offset-retrieval}) shows that the autoencoder recognizes a place reliably only within about 3~m, so his tests measured a nearly ideal case. This is the reason for the 6.4~m dense grid implementation.
+
+In order to choose that exact measure for the density of the grid, I have performed a series of tests:
+\begin{itemize}
+\item Exact crops of the color-corrected map were shifted by 0 up to 12.8~m from a patch center, without any rotation or scale change (200 patches per offset). The top-1 rate stays at 96\% up to 3.2~m from the patch center, but falls to 37.5\% at 6.4~m.
+\item The same crops were cut from the raw orthophoto, to isolate the effect of color. The top-1 rate fell from 100\% to 76.5\% at zero offset, meaning that the encoder is also sensitive to the color correction it was trained with.
+\item The 42 hand-made test crops were located on the map with LightGlue and passed through his own pipeline with his saved fingerprints. Those crops cover about 52~m and their centers lie a median of 15.6~m from the center of the photo they were cut from.
+\end{itemize}
+In other words, the test crops were cut to line up with the patches, whereas the center of a real photo does not. On the 6.4~m grid, no position is more than 4.5~m from a patch center.
+
+Finally, the autoencoder was built into the pipeline as the relocalization step and it produced the results in Table~\ref{tab:reloc-ae-sim}.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Simulated flights with the autoencoder as the relocalization step, 5 flights of 2~km per scenario. VO+map: odometry with map checks; +AE: VO+map with the autoencoder for relocalization; AE only: Fabris's original method. Errors are medians over the flights; recovered: flights ending within 5~m. No pipeline produced a false fix.}
+  \label{tab:reloc-ae-sim}
+  \small\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{llrrrrrr}
+    \toprule
+    & & Final & ATE & Max & Within & Re- & ms per \\
+    Scenario & Pipeline & error (m) & (m) & error (m) & 5~m (\%) & covered & image \\
+    \midrule
+    Long flight & VO+map & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 335 \\
+     & +AE & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 328 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 3.4 & 0/5 & 65 \\
+    \addlinespace
+    Blackout & VO+map & 175.20 & 194.90 & 340.94 & 44.8 & 1/5 & 385 \\
+     & +AE & 0.20 & 52.28 & 246.03 & 87.7 & 5/5 & 313 \\
+     & AE only & 173.42 & 275.10 & 671.64 & 4.4 & 0/5 & 63 \\
+    \addlinespace
+    Unknown start & VO+map & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 328 \\
+     & +AE & 0.20 & 0.28 & 0.71 & 100.0 & 5/5 & 338 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 2.2 & 0/5 & 72 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+As visible from Table~\ref{tab:reloc-ae-sim}, in the pipeline the autoencoder managed to recover two scenarios, where after the blackout and from a wrong start it relocalizes the system within 0.2~m from the actual location. Without it, the odometry + map checks stayed 175--272~m off. It is important to note that the maximum error of 246~m during the blackout is not a failure of localization, it is simply caused by the absence of data from the drone's camera. Fabris's autoencoder on its own ends 170--270~m off, because a single unverified top-1 guess per image is wrong too often.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The real photo flight (58 photos, 3.5~km) with the autoencoder. VO: odometry alone; VO+map: with map checks; +AE: VO+map with the autoencoder for relocalization; AE only: Fabris's original method. Map fixes and relocalizations: accepted/attempted.}
+  \label{tab:reloc-ae-real}
+  \small\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrrrrrr}
+    \toprule
+    & Final & ATE & Max & Within & Map & Re- & False & ms per \\
+    Pipeline & error (m) & (m) & error (m) & 5~m (\%) & fixes & loc. & fixes & image \\
+    \midrule
+    VO & 588.54 & 224.44 & 638.28 & 6.9 & 0/0 & 0/0 & 0 & 207 \\
+    VO+map & 553.67 & 211.42 & 611.92 & 44.8 & 7/25 & 0/0 & 0 & 317 \\
+    +AE & 194.56 & 33.76 & 194.56 & 69.0 & 10/15 & 3/5 & 0 & 434 \\
+    AE only & 450.37 & 536.30 & 948.07 & 0.0 & 0/0 & 0/0 & 0 & 111 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On the real photos (Table~\ref{tab:reloc-ae-real}), the autoencoder found 28/58 photos on the dense grid, 11/58 on his grid, with no wrong fix. Flown as one flight, the retriever relocalized the drone at three of the four gaps where odometry broke, 1--2~m from the GPS. At the last gap, the retriever found no verified place, so the flight ended 194.6~m off. Overall, the estimation was within 5~m for 69\% of the photos, against 45\% with map checks only and 7\% with visual odometry alone.
+
+The autoencoder works, however its narrow tolerance to offset and the fact that it has been trained only on a single map allow for the possibility of exploring other retriever options.
+
 \section{Pretrained CNN retrievers}
+\label{sec:reloc-cnn}
+The search for the new retrieving network had to fill in the following gaps: a network that would not need retraining on every new map, a network that would be at least as accurate as the autoencoder and potentially better, a network that would require less computational power without losing accuracy. For those reasons, two convolutional neural networks were chosen: ResNet50 and EfficientNet-B0.
+
+ResNet50 is the standard backbone of image retrieval and the baseline of the University-1652 drone-to-satellite benchmark. It has about 23.5 million parameters and it has been pre-trained on Places365, a dataset of scenes rather than objects, which is closer to aerial views of fields, roads and buildings than ImageNet. The official MIT CSAIL checkpoint is used.
+
+EfficientNet-B0 represents the potentially lightweight solution to the given problem. It has about 4 million parameters in its feature layers and its weights come from ImageNet.
+
+Both networks are used the same way, which is the standard recipe for turning a classification network into a retrieval network. The classification head is removed and the network is run up to its last convolutional layer. The resulting feature map is averaged over all positions (global average pooling) into one vector of 2048 numbers for ResNet50 and 1280 for EfficientNet-B0. The vector is then L2-normalized, so that the dot product of two fingerprints equals their cosine similarity. Global average pooling has a property that explains much of the result: it summarizes what is in the patch more than where it is, so a patch shifted by a few meters keeps nearly the same fingerprint. The 512~px patch is resized to 224~px and normalized with the ImageNet mean and standard deviation, because a network pretrained at 224~px performs best at the size and statistics it was trained on. At 224~px one pixel covers about 0.23~m, which is still finer than most of the structures that identify a place.
+
+In terms of implementation, both networks come from the torchvision library. ResNet50 is cut after its last convolutional block, dropping its own pooling and classification layers; for a 224~px input that block outputs a $7 \times 7$ map with 2048 channels. EfficientNet-B0 is used through its features part, which outputs a $7 \times 7$ map with 1280 channels. Averaging the 49 positions gives the fingerprint. The patch is shrunk from 512 to 224~px with area interpolation, which averages the pixels it merges and so avoids aliasing. In case of ResNet50, if the Places365 checkpoint cannot be loaded, the code falls back to ImageNet weights and says so in its output; the run of 5 November used Places365, as its first printed line confirms. Everything else is kept identical to the autoencoder retriever: the same 512~px patches, both grids, the same de-rotation of the query with the compass, the same top-5 with 25.6~m spacing, the same LightGlue verification with the 50-match rule, and the same flights and photos. Only the fingerprint function changes, so any difference in the results is caused by the retriever alone. Each fingerprint database is cached under a name that includes the retriever, its weights and its input size, so a cached database can never be reused for the wrong network. The database build time is stored with the cache, so the speed comparison survives a reload.
+
 \section{Comparison}
 \label{sec:reloc-comparison}
+At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue (Table~\ref{tab:retrieval-real}).
+
+% TODO: fill in Table 5.4 (source: cmp_real_retrieval_20261105_0003.csv)
+\begin{table}[!htbp]
+  \centering
+  \caption{Real photos searched from scratch, every retriever on both grids.}
+  \label{tab:retrieval-real}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_real\_retrieval\_20261105\_0003.csv).}}
+\end{table}
+
+The test results indicate that the CNNs manage to find 47/58 photos on the dense grid while the autoencoder finds only 28/58. Since only 51 photos can be matched to the map at all (Section~\ref{sec:map-check}), the CNNs locate 92\% of the photos that can be found (47/51). The gap is even wider on Fabris's original grid: 44/58 for the CNNs while that number collapses to 11/58 for the autoencoder. Recall@1 favors EfficientNet-B0, 0.66 against 0.55, but after verification the two CNNs are equal, because LightGlue picks the right candidate whenever it is anywhere in the top 5. Importantly, no retriever produced a single false fix, which confirms that LightGlue verification protects the pipeline regardless of the proposed candidates.
+
+The two CNNs each find 47 photos, but not the same 47. Both miss the seven unmatchable photos and three more (DJI\_0062, DJI\_0072 and DJI\_0078); EfficientNet-B0 also misses DJI\_0079, and ResNet50 misses DJI\_0052. However, two of the photos that EfficientNet-B0 does not find from scratch, DJI\_0072 and DJI\_0079, are found during the flight, where the search starts near the estimate. Thus, a rough prior position helps retrieval, which is why the pipeline searches locally before it searches the whole map. The same comparison on 100 simulated queries per condition shows where each retriever is strong.
+
+The simulated benchmark is built as follows. For each of the five conditions 100 query positions are drawn at random over the area covered by patch centers and the camera image is rendered there. In the conditions with rotation, the heading is drawn from the full circle, $-180^\circ$ to $180^\circ$, so the retriever is tested on any orientation. The query is then de-rotated with the simulated compass ($3^\circ$ of noise) and assumed to be at nominal altitude, so the $\pm 10\%$ scale change is unknown to the retriever. Every retriever receives the same query image. The top 10 candidates give the recall figures, and the top 5 are verified with LightGlue. The full results are given in Table~\ref{tab:retrieval-sim}.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Simulated retrieval benchmark: 100 queries per condition, on Fabris's 25.6~m grid and the dense 6.4~m grid. R@$K$: share of queries with a top-$K$ candidate within 18.1~m; top-1 error: median distance of the best candidate; within 5~m: share of top-1 candidates within 5~m; correct and false: shares of LightGlue-verified fixes.}
+  \label{tab:retrieval-sim}
+  \footnotesize\setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{lllrrrrrrr}
+    \toprule
+    & & & & & & Top-1 & Top-1 & \multicolumn{2}{c}{Verified fix} \\
+    \cmidrule(lr){9-10}
+    Condition & Retriever & Grid & R@1 & R@5 & R@10 & err.\ (m) & ${\le}5$~m & correct & false \\
+    \midrule
+    None & AE & 25.6~m & 0.05 & 0.08 & 0.10 & 334.8 & 0.03 & 0.22 & 0.00 \\
+     & AE & 6.4~m & 0.45 & 0.71 & 0.79 & 166.9 & 0.41 & 0.74 & 0.00 \\
+     & ResNet50 & 25.6~m & 0.85 & 0.99 & 1.00 & 11.9 & 0.11 & 1.00 & 0.00 \\
+     & ResNet50 & 6.4~m & 0.94 & 0.99 & 0.99 & 4.0 & 0.65 & 1.00 & 0.00 \\
+     & EffNet-B0 & 25.6~m & 0.86 & 1.00 & 1.00 & 11.1 & 0.12 & 1.00 & 0.00 \\
+     & EffNet-B0 & 6.4~m & 0.99 & 0.99 & 0.99 & 3.0 & 0.74 & 1.00 & 0.00 \\
+    \addlinespace
+    Rotation & AE & 25.6~m & 0.10 & 0.17 & 0.20 & 304.9 & 0.08 & 0.31 & 0.00 \\
+     & AE & 6.4~m & 0.43 & 0.67 & 0.74 & 145.2 & 0.41 & 0.70 & 0.00 \\
+     & ResNet50 & 25.6~m & 0.80 & 0.97 & 0.97 & 11.3 & 0.14 & 1.00 & 0.00 \\
+     & ResNet50 & 6.4~m & 0.97 & 0.99 & 1.00 & 3.9 & 0.63 & 1.00 & 0.00 \\
+     & EffNet-B0 & 25.6~m & 0.86 & 0.96 & 0.99 & 11.2 & 0.14 & 1.00 & 0.00 \\
+     & EffNet-B0 & 6.4~m & 0.99 & 1.00 & 1.00 & 3.4 & 0.77 & 1.00 & 0.00 \\
+    \addlinespace
+    Scale & AE & 25.6~m & 0.05 & 0.11 & 0.11 & 319.5 & 0.04 & 0.22 & 0.00 \\
+     & AE & 6.4~m & 0.37 & 0.61 & 0.74 & 223.6 & 0.35 & 0.67 & 0.00 \\
+     & ResNet50 & 25.6~m & 0.80 & 0.99 & 1.00 & 12.3 & 0.09 & 1.00 & 0.00 \\
+     & ResNet50 & 6.4~m & 0.92 & 0.99 & 0.99 & 4.4 & 0.55 & 1.00 & 0.00 \\
+     & EffNet-B0 & 25.6~m & 0.82 & 0.99 & 0.99 & 12.3 & 0.11 & 1.00 & 0.00 \\
+     & EffNet-B0 & 6.4~m & 0.96 & 1.00 & 1.00 & 3.5 & 0.69 & 1.00 & 0.00 \\
+    \addlinespace
+    Photometric & AE & 25.6~m & 0.08 & 0.17 & 0.21 & 323.2 & 0.05 & 0.39 & 0.01 \\
+     & AE & 6.4~m & 0.69 & 0.78 & 0.82 & 3.5 & 0.62 & 0.83 & 0.00 \\
+     & ResNet50 & 25.6~m & 0.35 & 0.62 & 0.70 & 40.5 & 0.04 & 0.75 & 0.00 \\
+     & ResNet50 & 6.4~m & 0.43 & 0.65 & 0.75 & 24.4 & 0.10 & 0.77 & 0.00 \\
+     & EffNet-B0 & 25.6~m & 0.58 & 0.85 & 0.88 & 14.6 & 0.10 & 0.92 & 0.00 \\
+     & EffNet-B0 & 6.4~m & 0.74 & 0.87 & 0.89 & 10.1 & 0.25 & 0.94 & 0.00 \\
+    \addlinespace
+    Realistic & AE & 25.6~m & 0.15 & 0.27 & 0.32 & 283.4 & 0.11 & 0.45 & 0.00 \\
+     & AE & 6.4~m & 0.61 & 0.72 & 0.80 & 3.9 & 0.54 & 0.75 & 0.00 \\
+     & ResNet50 & 25.6~m & 0.31 & 0.64 & 0.72 & 45.5 & 0.07 & 0.76 & 0.00 \\
+     & ResNet50 & 6.4~m & 0.50 & 0.70 & 0.80 & 20.6 & 0.14 & 0.82 & 0.00 \\
+     & EffNet-B0 & 25.6~m & 0.53 & 0.75 & 0.81 & 16.9 & 0.11 & 0.89 & 0.00 \\
+     & EffNet-B0 & 6.4~m & 0.66 & 0.89 & 0.90 & 8.3 & 0.25 & 0.94 & 0.00 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The four augmentation conditions show which kind of change hurts which retriever. Each cell of Table~\ref{tab:retrieval-conditions} gives Recall@1, Recall@5 and the share of correct verified fixes on the dense grid.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Effect of each augmentation condition on the dense 6.4~m grid. Each cell: Recall@1 / Recall@5 / share of correct verified fixes, 100 queries per condition.}
+  \label{tab:retrieval-conditions}
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Condition & AE & ResNet50 & EfficientNet-B0 \\
+    \midrule
+    None & 0.45 / 0.71 / 0.74 & 0.94 / 0.99 / 1.00 & 0.99 / 0.99 / 1.00 \\
+    Rotation & 0.43 / 0.67 / 0.70 & 0.97 / 0.99 / 1.00 & 0.99 / 1.00 / 1.00 \\
+    Scale & 0.37 / 0.61 / 0.67 & 0.92 / 0.99 / 1.00 & 0.96 / 1.00 / 1.00 \\
+    Photometric & 0.69 / 0.78 / 0.83 & 0.43 / 0.65 / 0.77 & 0.74 / 0.87 / 0.94 \\
+    Realistic & 0.61 / 0.72 / 0.75 & 0.50 / 0.70 / 0.82 & 0.66 / 0.89 / 0.94 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Evidently, the geometric changes do not affect the performance of the CNNs at all: with rotation or scale alone they reach a correct verified fix on every query. What costs them accuracy is the photometric change. From the conducted tests it is clear that ResNet50 loses more than EfficientNet-B0, keeping 77\% correct verified fixes against 94\%, even while having substantially more parameters.
+
+It is interesting to observe that the autoencoder behaves the other way around and one of its results is not explained: it scores higher with photometric change than with no change at all (0.69 against 0.45). Two facts may contribute: the query positions differ between conditions, and the unchanged camera image comes from the raw orthophoto, whose colors the encoder was not trained on. Neither was tested as the cause, so this remains an open observation.
+
+At the same time, it should be stated that when the autoencoder is right it is very precise: in the realistic condition its top-1 lands within 5~m for 54\% of the queries, against 25\% for EfficientNet-B0, because it was trained on this exact map and its fingerprint is sharp at the patch center. The CNNs are less precise but far more robust and they put the right area in their top 5 much more often (0.89 against 0.72, for EfficientNet-B0 and the autoencoder). Considering the fact that there was no fine-tuning involved for the CNNs and they operate with the pre-trained weights, they have the potential to perform even more accurately given appropriate fine-tuning, which is left for future work.
+
+Since after the retrieving step LightGlue measures the exact position anyway, robustness is what matters when it comes to retrievers and the verified-fix rate in the realistic condition reflects that: 94\% for EfficientNet-B0, 82\% for ResNet50 and 75\% for the autoencoder. The gate sweep (Table~\ref{tab:gate}) confirms the threshold of 50 agreeing pairs: on the dense grid no retriever produced a false fix at any threshold from 15 to 150 and raising the threshold from 50 to 150 costs only about one percentage point of accepted fixes. The sweep pools the 500 queries of all five augmentation conditions.
+
+% TODO: fill in Table 5.7 (source: cmp_gate_20261105_0003.csv)
+\begin{table}[!htbp]
+  \centering
+  \caption{Gate sweep: accepted, correct and false fixes for minimum-match thresholds from 15 to 150, pooled over the 500 queries of the five augmentation conditions.}
+  \label{tab:gate}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_gate\_20261105\_0003.csv).}}
+\end{table}
+
+As visible from Table~\ref{tab:gate}, the accepted share hardly moves from 15 to 150 inliers, which means the correct candidate usually passes with a large margin and a more exact threshold is not critical. The CNNs accepted no wrong fixes on either grid (dense and coarse). The only wrong fixes, 0.6--1.2\% of the accepted ones, came from the autoencoder on Fabris's grid.
+
+A crop moved 6.4~m from a patch center is still matched to that patch in 98\% of cases by ResNet50 and 94\% by EfficientNet-B0, against 38\% by the autoencoder; at 12.8~m the figures are 60\%, 65\% and 9\%. Global average pooling makes the CNN fingerprint describe what a patch contains rather than its exact framing. That is why the CNNs work even on the coarse grid, and why the autoencoder needs the dense one. The full shift test (Table~\ref{tab:shift-retrievers}) gives the curve for each retriever. Two hundred patches of Fabris's grid are chosen, a crop of the color-corrected map is cut at a given distance from each patch center in a random direction, and the test asks whether that nearest patch is ranked first.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Shift test: share of crops whose nearest patch is ranked first, for crops of the color-corrected map cut at a given distance from 200 patch centers of Fabris's grid in a random direction.}
+  \label{tab:shift-retrievers}
+  \small
+  \begin{tabular}{rrrr}
+    \toprule
+    Offset (m) & AE & ResNet50 & EfficientNet-B0 \\
+    \midrule
+    0.0 & 100.0\% & 100.0\% & 100.0\% \\
+    0.8 & 99.0\% & 100.0\% & 100.0\% \\
+    1.6 & 98.5\% & 99.5\% & 100.0\% \\
+    3.2 & 96.0\% & 99.5\% & 98.5\% \\
+    6.4 & 37.5\% & 97.5\% & 94.0\% \\
+    9.6 & 13.0\% & 86.0\% & 82.0\% \\
+    12.8 & 8.5\% & 60.0\% & 65.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The autoencoder collapses between 3.2 and 6.4~m, while the CNNs lose only a few points there and still find the right patch in most cases at 9.6~m. Half the spacing of the dense grid is 3.2~m along each axis, which is exactly where the autoencoder is still reliable. This is yet another quantitative reason why the 6.4~m spacing was chosen for the dense grid.
+
+Flying the 58 real photos as one 3.5~km flight through each pipeline gives the results in Table~\ref{tab:reloc-all-real}.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The real photo flight (58 photos, 3.5~km) with all pipelines. Map fixes and relocalizations: accepted/attempted; escal.: map-check failures escalated to a relocalization. VO: odometry alone; VO+map: with map checks; +AE, +ResNet50, +EffNet-B0: VO+map with that retriever for relocalization; AE only: Fabris's original method.}
+  \label{tab:reloc-all-real}
+  \small\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrrrrrrr}
+    \toprule
+    & Final & ATE & Max & Within & Map & Re- & & False & ms per \\
+    Pipeline & error (m) & (m) & error (m) & 5~m (\%) & fixes & loc. & Escal. & fixes & image \\
+    \midrule
+    VO & 588.54 & 224.44 & 638.28 & 6.9 & 0/0 & 0/0 & 0 & 0 & 207 \\
+    VO+map & 553.67 & 211.42 & 611.92 & 44.8 & 7/25 & 0/0 & 0 & 0 & 317 \\
+    +AE & 194.56 & 33.76 & 194.56 & 69.0 & 10/15 & 3/5 & 3 & 0 & 434 \\
+    +ResNet50 & 1.91 & 10.46 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 & 392 \\
+    +EffNet-B0 & 1.99 & 10.45 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 & 365 \\
+    AE only & 450.37 & 536.30 & 948.07 & 0.0 & 0/0 & 0/0 & 0 & 0 & 111 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+With either CNN the drone is relocalized at all four gaps where odometry breaks and ends about 2~m from GPS, against 195~m with the autoencoder, which misses the last gap. The remaining errors of up to 33~m are identical for all three retrievers. They come from odometry drift over stretches where the photos do not match the map, so the map checks fail there, and they are a limitation of the real photo spacing, not of retrieval. In the simulated flights all three retrievers recover every flight (final error 0.17--0.22~m in every scenario), so the real photos pinpoint the autoencoder's weakness.
+
+The per-photo log makes the flight easy to narrate. Six gaps between consecutive photos exceed 100~m. Odometry still bridges two of them (100~m at frame 20 and 111~m at frame 34) and breaks at the other four: 123~m at frame 42, 106~m at frame 49, 130~m at frame 52 and 144~m at frame 56. At each break the drone is relocalized on the same photo, 0.8 to 2.2~m from the reference with EfficientNet-B0. The autoencoder succeeds at the first three and fails at frame 56, which leaves the drone 144~m off on that photo and 195~m off on the last one.
+
+The errors between fixes have an equally clear cause. The two stretches where the error climbs, frames 21--29 (up to 33~m) and frames 38--41 (up to 22~m), contain the unmatchable photos, frames 25--28 and 40--41. On those frames no map check can succeed, so the drone flies on odometry alone over steps of 50 to 100~m, and the error is removed only at the next photo that matches the map (frames 30 and 42). The counts in the table reflect this: 10 of the 15 map checks attempted succeed, and all 4 relocalizations do.
+
+The simulated flights with the three complete pipelines give the results in Table~\ref{tab:reloc-all-sim}.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Simulated flights with all pipelines, 5 flights of 2~km per scenario. Errors are medians over the flights; recovered: flights ending within 5~m. No pipeline produced a false fix. Time per image on a T4 GPU, without rendering the simulated camera image. VO: odometry alone; VO+map: with map checks; +AE, +ResNet50, +EffNet-B0: VO+map with that retriever for relocalization; AE only: Fabris's original method.}
+  \label{tab:reloc-all-sim}
+  \small\setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{llrrrrrr}
+    \toprule
+    & & Final & ATE & Max & Within & Re- & ms per \\
+    Scenario & Pipeline & error (m) & (m) & error (m) & 5~m (\%) & covered & image \\
+    \midrule
+    Long flight & VO & 1.57 & 1.65 & 3.18 & 99.8 & 5/5 & 274 \\
+     & VO+map & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 335 \\
+     & +AE & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 328 \\
+     & +ResNet50 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 330 \\
+     & +EffNet-B0 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 331 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 3.4 & 0/5 & 65 \\
+    \addlinespace
+    Blackout & VO & 228.03 & 193.90 & 340.11 & 39.4 & 0/5 & 235 \\
+     & VO+map & 175.20 & 194.90 & 340.94 & 44.8 & 1/5 & 385 \\
+     & +AE & 0.20 & 52.28 & 246.03 & 87.7 & 5/5 & 313 \\
+     & +ResNet50 & 0.20 & 52.28 & 246.03 & 87.9 & 5/5 & 309 \\
+     & +EffNet-B0 & 0.17 & 52.28 & 246.03 & 88.1 & 5/5 & 303 \\
+     & AE only & 173.42 & 275.10 & 671.64 & 4.4 & 0/5 & 63 \\
+    \addlinespace
+    Unknown start & VO & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 271 \\
+     & VO+map & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 328 \\
+     & +AE & 0.20 & 0.28 & 0.71 & 100.0 & 5/5 & 338 \\
+     & +ResNet50 & 0.22 & 0.29 & 0.74 & 100.0 & 5/5 & 341 \\
+     & +EffNet-B0 & 0.18 & 0.27 & 0.70 & 100.0 & 5/5 & 342 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 2.2 & 0/5 & 72 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The long flight is identical for all three because relocalization is never called on it: the map checks keep the drone on track. In the other two scenarios a single relocalization is needed per flight and every retriever succeeds, so the simulation cannot rank them. The table also gives the average time per image on the T4 GPU (Google Colab), measured without the rendering of the simulated camera image: 0.23 to 0.27~s with odometry alone, 0.33 to 0.38~s with map checks, 0.30 to 0.34~s for the full pipelines, and 0.06 to 0.07~s for Fabris's method, which does no matching. The speed of the retrievers themselves is given in Table~\ref{tab:speed}.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Speed of the retrievers on a T4 GPU and on CPU. Speed test: 20 single patches after a warm-up; benchmark median: median over the queries of the realistic condition of the retrieval benchmark. Parameter counts cover only the layers used.}
+  \label{tab:speed}
+  \small
+  \begin{tabular}{lrrr}
+    \toprule
+    & AE & ResNet50 & EffNet-B0 \\
+    \midrule
+    Weights & Fabris & Places365 & ImageNet \\
+    Fingerprint size & 2048 & 2048 & 1280 \\
+    Parameters (M) & 268.81 & 23.51 & 4.01 \\
+    GPU fingerprint, speed test (ms) & 170.6 & 48.1 & 47.0 \\
+    GPU fingerprint, benchmark (ms) & 47.4 & 14.3 & 12.6 \\
+    CPU fingerprint (ms) & 3988 & 685 & 87 \\
+    Dense grid search (ms) & 20.7 & 45.1 & 16.9 \\
+    25.6~m grid database (MB) & 8.2 & 8.2 & 5.2 \\
+    Dense database (MB) & 128.8 & 128.8 & 80.5 \\
+    Dense database build (s) & 1104 & 103 & 57 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+One fingerprint takes about 13~ms (EfficientNet-B0), 14~ms (ResNet50) and 44--54~ms (autoencoder) on a T4 GPU during the retrieval benchmark, and 0.09~s, 0.69~s and 4.0~s on a CPU. Building the dense database takes about 1 minute with EfficientNet-B0 and 18 minutes with the autoencoder. A full relocalization, including LightGlue verification, takes about 1.3~s in all three cases, because LightGlue dominates its cost. In Table~\ref{tab:speed} the speed test timed 20 single images right after the databases were loaded, while the benchmark column is the median over the queries of a long run. The ranking is the same in both and the CPU column is unambiguous: 4.0~s, 0.69~s and 0.09~s. The parameter counts cover only the layers that are used, without the removed classification heads. The search itself is cheap, 17 to 45~ms for all 16{,}492 patches, and the dense database of EfficientNet-B0 takes 81~MB of memory against 129~MB for the two 2048-number fingerprints.
+
+In conclusion, EfficientNet-B0 is equal or better than the alternatives and much lighter, and it is the retriever used from here on, even though the autoencoder was trained on this exact map and the CNNs were not.
+
 
 \chapter{Sensor fusion with the EKF}
 \label{chap:ekf}
