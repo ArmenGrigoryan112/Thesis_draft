@@ -597,12 +597,26 @@ In terms of implementation, both networks come from the torchvision library. Res
 \label{sec:reloc-comparison}
 At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue (Table~\ref{tab:retrieval-real}).
 
-% TODO: fill in Table 5.4 (source: cmp_real_retrieval_20261105_0003.csv)
 \begin{table}[!htbp]
   \centering
-  \caption{Real photos searched from scratch, every retriever on both grids.}
+  \caption{The 58 real flight photos searched from scratch, every retriever on both grids. R@$K$: share of photos with a top-$K$ candidate within 18.1~m; top-1 error: median distance of the best candidate; within 5~m: share of top-1 candidates within 5~m; found: correct LightGlue-verified fixes; fix error: median error of the correct fixes; time: one full relocalization including verification.}
   \label{tab:retrieval-real}
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_real\_retrieval\_20261105\_0003.csv).}}
+  \footnotesize\setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{llrrrrrrrrr}
+    \toprule
+    & & & & & Top-1 & Top-1 & & False & Fix & Time \\
+    Retriever & Grid & R@1 & R@5 & R@10 & err.\ (m) & ${\le}5$~m & Found & fixes & err.\ (m) & (s) \\
+    \midrule
+    AE & 25.6~m & 0.05 & 0.09 & 0.10 & 410.6 & 0.03 & 11/58 & 0 & 1.31 & 1.31 \\
+     & 6.4~m & 0.38 & 0.45 & 0.48 & 259.4 & 0.34 & 28/58 & 0 & 1.16 & 1.34 \\
+    \addlinespace
+    ResNet50 & 25.6~m & 0.38 & 0.66 & 0.74 & 23.4 & 0.05 & 44/58 & 0 & 1.19 & 1.32 \\
+     & 6.4~m & 0.55 & 0.67 & 0.81 & 15.3 & 0.14 & 47/58 & 0 & 1.15 & 1.32 \\
+    \addlinespace
+    EffNet-B0 & 25.6~m & 0.47 & 0.66 & 0.71 & 19.0 & 0.07 & 44/58 & 0 & 1.20 & 1.33 \\
+     & 6.4~m & 0.66 & 0.76 & 0.81 & 10.7 & 0.19 & 47/58 & 0 & 1.18 & 1.33 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 The test results indicate that the CNNs manage to find 47/58 photos on the dense grid while the autoencoder finds only 28/58. Since only 51 photos can be matched to the map at all (Section~\ref{sec:map-check}), the CNNs locate 92\% of the photos that can be found (47/51). The gap is even wider on Fabris's original grid: 44/58 for the CNNs while that number collapses to 11/58 for the autoencoder. Recall@1 favors EfficientNet-B0, 0.66 against 0.55, but after verification the two CNNs are equal, because LightGlue picks the right candidate whenever it is anywhere in the top 5. Importantly, no retriever produced a single false fix, which confirms that LightGlue verification protects the pipeline regardless of the proposed candidates.
@@ -688,12 +702,25 @@ At the same time, it should be stated that when the autoencoder is right it is v
 
 Since after the retrieving step LightGlue measures the exact position anyway, robustness is what matters when it comes to retrievers and the verified-fix rate in the realistic condition reflects that: 94\% for EfficientNet-B0, 82\% for ResNet50 and 75\% for the autoencoder. The gate sweep (Table~\ref{tab:gate}) confirms the threshold of 50 agreeing pairs: on the dense grid no retriever produced a false fix at any threshold from 15 to 150 and raising the threshold from 50 to 150 costs only about one percentage point of accepted fixes. The sweep pools the 500 queries of all five augmentation conditions.
 
-% TODO: fill in Table 5.7 (source: cmp_gate_20261105_0003.csv)
 \begin{table}[!htbp]
   \centering
-  \caption{Gate sweep: accepted, correct and false fixes for minimum-match thresholds from 15 to 150, pooled over the 500 queries of the five augmentation conditions.}
+  \caption{Gate sweep: share of queries with an accepted fix (\%) for minimum-match thresholds from 15 to 150, pooled over the 500 simulated queries of the five augmentation conditions. All accepted fixes were correct except for the autoencoder on the 25.6~m grid, where 1.14\%, 1.16\%, 0.62\%, 0.65\%, 0.66\%, 0.70\% of the accepted fixes were false at the six thresholds.}
   \label{tab:gate}
-  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: cmp\_gate\_20261105\_0003.csv).}}
+  \small
+  \begin{tabular}{rrrrrrr}
+    \toprule
+    Minimum & \multicolumn{2}{c}{AE} & \multicolumn{2}{c}{ResNet50} & \multicolumn{2}{c}{EffNet-B0} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+    matches & 25.6~m & 6.4~m & 25.6~m & 6.4~m & 25.6~m & 6.4~m \\
+    \midrule
+    15 & 35.0 & 74.4 & 91.2 & 92.6 & 96.4 & 98.0 \\
+    25 & 34.6 & 74.2 & 90.8 & 92.4 & 96.4 & 98.0 \\
+    50 & 32.0 & 73.8 & 90.2 & 91.8 & 96.2 & 97.6 \\
+    75 & 30.6 & 73.0 & 89.6 & 91.2 & 95.8 & 97.0 \\
+    100 & 30.2 & 72.8 & 89.4 & 91.0 & 95.8 & 97.0 \\
+    150 & 28.6 & 72.2 & 88.4 & 90.6 & 95.2 & 96.8 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 As visible from Table~\ref{tab:gate}, the accepted share hardly moves from 15 to 150 inliers, which means the correct candidate usually passes with a large margin and a more exact threshold is not critical. The CNNs accepted no wrong fixes on either grid (dense and coarse). The only wrong fixes, 0.6--1.2\% of the accepted ones, came from the autoencoder on Fabris's grid.
