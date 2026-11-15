@@ -166,11 +166,11 @@ The camera's current view is generated on the fly. A 1640~px crop of the world o
 
 \subsection{Patch grids and image sizes}
 \label{sec:patch-grids}
-Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1054 patches, 747 of which passed his saliency filter. Our pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. Table~\ref{tab:offset-retrieval} shows how quickly the autoencoder's retrieval accuracy falls as the query moves away from the nearest patch center: with the color-corrected map, top-1 accuracy stays above 96\% up to an offset of 3.2~m but drops to 37.5\% at 6.4~m. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
+Besides the 1024~px camera image, the system uses one more image size. The database of the on-board map is built from patches of 512~px (51.2~m), the same size Fabris used. His autoencoder was trained on patches of this size, so the comparison has to keep it for the autoencoder to be treated fairly. Fabris's grid places a patch every 256~px (25.6~m), giving 1054 patches, 747 of which passed his saliency filter. Our pipeline uses a dense grid with a patch every 64~px (6.4~m), giving 16{,}492 patches. On a 25.6~m grid, a position can be up to 18.1~m from the nearest patch center, and the real flight photos lie about 10.8~m away on median. On a 6.4~m grid, no position is more than 4.5~m from a center. To measure this, crops of the color-corrected on-board map and of the raw orthophoto were cut at a given offset from 200 patch centers, without any rotation or scale change, and the test counted how often the nearest patch was ranked first (top-1) or among the first five (top-5). Table~\ref{tab:offset-retrieval} shows how quickly the autoencoder's retrieval accuracy falls as the query moves away from the nearest patch center: with the color-corrected map, top-1 accuracy stays above 96\% up to an offset of 3.2~m but drops to 37.5\% at 6.4~m. The reason this matters is shown in Chapter~\ref{chap:relocalization}. The dense grid is used for every retriever, so the comparison between them stays fair, and searching all 16{,}492 fingerprints costs only a matrix product of a few milliseconds.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Offset tolerance of Fabris's autoencoder: top-1 and top-5 rate of finding the nearest patch for crops cut at a given offset from the patch center (200 patches per offset, no rotation or scale change), on the color-corrected on-board map and on the raw orthophoto.}
+  \caption{Offset tolerance of Fabris's autoencoder}
   \label{tab:offset-retrieval}
   \begin{tabular}{rrrrrr}
     \toprule
@@ -275,11 +275,11 @@ The step can be described using the following formulas:
 \end{align}
 The first is the fitted model, the second is the movement of the drone in keyframe pixels and the third is the update of position and attitude.
 
-To verify the implementation of these formulas, we performed checks on three cases with known answers, on images without photometric change (Table~\ref{tab:vo-known-answer}). The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.
+To verify the implementation of these formulas, we performed checks on three cases with known answers, on images without photometric change. Table~\ref{tab:vo-known-answer} lists the expected values next to what each matcher measured, with shifts in pixels and the inlier ratio as the share of matches that agree with the fitted motion. In this and the following tables, SP+LG stands for SuperPoint + LightGlue and ELoFTR for EfficientLoFTR. The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Known-answer checks of the odometry step on images without photometric change: the expected values and what each matcher measured. Shifts in pixels; inlier ratio: share of matches that agree with the fitted motion. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Known-answer checks of the odometry step}
   \label{tab:vo-known-answer}
   \small
   \begin{tabular}{llrrrrr}
@@ -308,11 +308,11 @@ LightGlue recovers all three with an accuracy of at most a few hundredths of a p
 \label{sec:vo-matchers}
 The matcher was chosen by the benchmarks. Each one of the six tiles was flown with 10 seeds, two matchers and two path types (4- and 8-connectivity, described in Section~\ref{sec:simulation}), giving 240 flights of 25 steps (512~m with 4-connectivity, about 600~m with 8-connectivity) in the realistic condition. SuperPoint + LightGlue was accurate at every level: each step was off by about 27~cm and $0.04^\circ$. At the flown distance, the median final drift was 0.64~m with 4-connectivity, about 1~m per 800~m flown, and 0.89~m with 8-connectivity. EfficientLoFTR on the other hand, as a detector-free transformer-based matcher, produced about four times more matches, but only about 2\% of them agreed with a single motion, whereas with LightGlue this metric was at 74\%. EfficientLoFTR's rotation error was about $6.5^\circ$ per step, which accumulated in the stored heading, so every later movement was added in the wrong direction, resulting in the drone getting lost. Many matches are worthless if they do not agree with one motion and a rotation error is far more significant than a shift error, because it bends the whole remaining path.
 
-Both matchers were given the same images and the same estimator, so only the matching differed. EfficientLoFTR was the pretrained version from the HuggingFace framework, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results are shown in Table~\ref{tab:vo-pooled}.
+Both matchers were given the same images and the same estimator, so only the matching differed. EfficientLoFTR was the pretrained version from the HuggingFace framework, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results over all six tiles, 60 flights per matcher and connectivity, are shown in Table~\ref{tab:vo-pooled}.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Pooled visual odometry benchmark: six tiles, 10 flights of 25 steps per tile and configuration (60 flights each; 512~m with 4-connectivity, about 600~m with 8-connectivity), realistic condition. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Pooled visual odometry benchmark}
   \label{tab:vo-pooled}
   \small
   \begin{tabular}{lrrrr}
@@ -338,11 +338,11 @@ Both matchers were given the same images and the same estimator, so only the mat
   \end{tabular}
 \end{table}
 
-For SuperPoint + LightGlue, the error of a single step is nearly the same on every tile, 0.26--0.29~m, so the matcher itself does not depend on the terrain. As visible from Table~\ref{tab:vo-per-tile}, tile 06611109 with diagonal movements had the most failed steps of this matcher, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. On these flights the mean final drift is 11.3~m, although the median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
+For SuperPoint + LightGlue, the error of a single step is nearly the same on every tile, 0.26--0.29~m, so the matcher itself does not depend on the terrain. Table~\ref{tab:vo-per-tile} breaks the same flights down by tile, with 10 flights per tile and configuration, and its step error is the median step translation error. As visible from the table, tile 06611109 with diagonal movements had the most failed steps of this matcher, 51. Since at this stage of the pipeline visual odometry's estimate is not supported by any other system, a single failure can cause a completely wrong localization of a whole flight. On these flights the mean final drift is 11.3~m, although the median is 1.4~m. A single lost flight can distort the mean as an outlier in this way, which is why medians are also reported in the table.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Visual odometry results per tile: 10 flights of 25 steps (512~m with 4-connectivity, about 600~m with 8-connectivity) per tile and configuration, realistic condition. Conn.: connectivity; step error: median step translation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Visual odometry results per tile}
   \label{tab:vo-per-tile}
   \small
   \setlength{\tabcolsep}{4pt}
@@ -385,11 +385,11 @@ For SuperPoint + LightGlue, the error of a single step is nearly the same on eve
   \end{tabular}
 \end{table}
 
-For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. Three seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 99\% to 75\% (Table~\ref{tab:vo-ablation}). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
+For both of the matchers the performance was also measured for the different augmentation conditions discussed in Section~\ref{sec:augmentations}. Three seeded flight simulations were performed (tile 06611109, seeds 26, 42 and 77), with 25 steps each (75 in total) and in the 4-connectivity mode. The only condition that hurts LightGlue is the photometric one: its drift rises to about 1~m and its inlier ratio falls from 99\% to 75\% (Table~\ref{tab:vo-ablation}, where drift is the final drift and the rotation error is the step rotation error). The realistic condition gives the same numbers, so LightGlue's error in realistic flights is photometric, not geometric.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Augmentation ablation on tile 06611109: three flights (seeds 26, 42 and 77) of 25 steps each, 4-connectivity. Drift is the final drift; rot.\ err.: step rotation error. SP+LG: SuperPoint + LightGlue; ELoFTR: EfficientLoFTR.}
+  \caption{Augmentation ablation of the two matchers}
   \label{tab:vo-ablation}
   \small
   \begin{tabular}{lrrrrrrrr}
@@ -410,12 +410,12 @@ For both of the matchers the performance was also measured for the different aug
 
 EfficientLoFTR has two separate weaknesses. Rotation alone is catastrophic, since only 6\% of its matches agree and the rotation error causes a drift of 129~m. Photometric change alone also breaks the matcher, in a different way: only 4.5\% of the matches agree. Scale alone is tolerable (8~m). However, even with no change it drifts about 2.5~m, far more than LightGlue's 0.05~m.
 
-Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results on a simulated flight. The first one shows one flight (tile 06611109, seed 26, 4-connectivity), with frame-to-frame odometry on the left and matching against the map on the right. The second figure shows what each matcher matched on one step of the simulated flight.
+Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results on a simulated flight. The first one shows one flight (tile 06611109, seed 26, 4-connectivity), with frame-to-frame odometry on the left and matching against the map on the right. Its upper panels show the trajectories of both matchers and its lower panels their error against the distance flown. The second figure shows what each matcher matched on one step of the simulated flight.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.85\textwidth]{images/vo-flight-seed26.jpg}
-  \caption{One simulated flight (tile 06611109, seed 26, 4-connectivity): trajectories of both matchers and their error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
+  \caption{One simulated flight with both matchers}
   \label{fig:vo-flight}
 \end{figure}
 
@@ -424,20 +424,20 @@ In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue whi
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.62\textwidth]{images/vo-matches-step.jpg}
-  \caption{What each matcher matched on one step with a true rotation of $13.0^\circ$: accepted matches in green, rejected in red. Top: SuperPoint + LightGlue; bottom: EfficientLoFTR.}
+  \caption{Matches of both matchers on one step}
   \label{fig:vo-matches}
 \end{figure}
 
-On the step shown in Figure~\ref{fig:vo-matches}, with a true rotation of $13.0^\circ$, LightGlue estimated $12.9^\circ$ with 317/494 matches accepted, while EfficientLoFTR estimated $27.1^\circ$ with 15/1729 accepted.
+Figure~\ref{fig:vo-matches} shows SuperPoint + LightGlue on top and EfficientLoFTR below, with accepted matches in green and rejected ones in red. On this step, with a true rotation of $13.0^\circ$, LightGlue estimated $12.9^\circ$ with 317/494 matches accepted, while EfficientLoFTR estimated $27.1^\circ$ with 15/1729 accepted.
 
 \section{Failure modes and drift}
 \label{sec:vo-failures}
-The benchmark also revealed how odometry fails. Of the 56 of 1500 failed steps on diagonal paths, 51 were on tile 06611109, whose flights start over fields with rows of nearly identical texture, where matched points are ambiguous. After a failure the drone keeps its last good keyframe, but the gap to it widens with every step, and once the images no longer overlap, odometry has no way of recovering. A flight can also go far off in the middle and come back. On tile 06611116 (4-connectivity), the median final drift was 0.83~m while the median ATE was 4.04~m, which is why both numbers are reported. Figure~\ref{fig:vo-failed} shows an instance of a failed flight, in which LightGlue ended 81.8~m off the track. Matching against the map cannot rescue this flight either, because once the estimate is more than about 30~m off over repetitive fields, the map crop no longer shows the right place.
+The benchmark also revealed how odometry fails. Of the 56 of 1500 failed steps on diagonal paths, 51 were on tile 06611109, whose flights start over fields with rows of nearly identical texture, where matched points are ambiguous. After a failure the drone keeps its last good keyframe, but the gap to it widens with every step, and once the images no longer overlap, odometry has no way of recovering. A flight can also go far off in the middle and come back. On tile 06611116 (4-connectivity), the median final drift was 0.83~m while the median ATE was 4.04~m, which is why both numbers are reported. Figure~\ref{fig:vo-failed} shows an instance of a failed flight (tile 06611109, seed 42, 8-connectivity, realistic condition), laid out like Figure~\ref{fig:vo-flight}, in which LightGlue ended 81.8~m off the track. Matching against the map cannot rescue this flight either, because once the estimate is more than about 30~m off over repetitive fields, the map crop no longer shows the right place.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.85\textwidth]{images/vo-failed-seed42.jpg}
-  \caption{A failed flight over fields (tile 06611109, seed 42, 8-connectivity, realistic condition): trajectories and error against distance flown, for frame-to-frame odometry (left) and for matching against the map (right).}
+  \caption{A failed flight over fields}
   \label{fig:vo-failed}
 \end{figure}
 
@@ -455,7 +455,7 @@ In map checks the acceptance rules are stricter than in VO: at least 50 pairs mu
 
 Two details complete the description. The crop is centered on the estimate rounded to a whole pixel. LightGlue works on the de-rotated image, but the matched points are converted back to the raw camera image with $G$ before RANSAC runs, so the fitted transform is the full map-to-camera attitude and replaces $G$ directly.
 
-The effect of map checks can be seen in the VO and VO+map rows of Table~\ref{tab:reloc-all-sim} (five simulated flights of 2~km per scenario) and Table~\ref{tab:reloc-all-real} (the real photo flight). Both tables also contain the full pipelines of Chapter~\ref{chap:relocalization}.
+The effect of map checks can be seen in the VO (odometry alone) and VO+map (odometry with map checks) rows of Table~\ref{tab:reloc-all-sim} (five simulated flights of 2~km per scenario) and Table~\ref{tab:reloc-all-real} (the real photo flight). Both tables also contain the full pipelines of Chapter~\ref{chap:relocalization}.
 
 
 
@@ -493,7 +493,7 @@ To understand this gap and to choose the density of the grid, we performed a ser
 \end{itemize}
 In other words, the test crops were cut to line up with the patches, whereas the center of a real photo does not. On the 6.4~m grid, no position is more than 4.5~m from a patch center.
 
-Finally, the autoencoder was built into the pipeline as the relocalization step. Its results are in the VO+map, +AE and AE only rows of Table~\ref{tab:reloc-all-sim} (simulated flights) and Table~\ref{tab:reloc-all-real} (the real photo flight), both given in full in Section~\ref{sec:reloc-comparison}.
+Finally, the autoencoder was built into the pipeline as the relocalization step. Its results are in the rows VO+map, +AE (VO+map with the autoencoder as the relocalization step) and AE only (Fabris's original method) of Table~\ref{tab:reloc-all-sim} (simulated flights) and Table~\ref{tab:reloc-all-real} (the real photo flight), both given in full in Section~\ref{sec:reloc-comparison}.
 
 
 In the simulated flights, the autoencoder managed to recover two scenarios, where after the blackout and from a wrong start it relocalizes the system within 0.2~m from the actual location. Without it, the odometry + map checks stayed 175--272~m off. It is important to note that the maximum error of 246~m during the blackout is not a failure of localization. It is simply caused by the absence of data from the drone's camera. Fabris's autoencoder on its own ends 170--270~m off, because a single unverified top-1 guess per image is wrong too often.
@@ -517,11 +517,11 @@ In terms of implementation, both networks come from the torchvision library. Res
 
 \section{Comparison}
 \label{sec:reloc-comparison}
-At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue (Table~\ref{tab:retrieval-real}).
+At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue. Table~\ref{tab:retrieval-real} reports the retrieval metrics of Section~\ref{sec:metrics-retrieval} for every retriever on both grids: Recall@$K$, the median distance of the top-1 candidate and the share of top-1 candidates within 5~m. The column `found' counts the correct LightGlue-verified fixes, the fix error is the median error of those fixes, and the time is that of one full relocalization including verification.
 
 \begin{table}[!htbp]
   \centering
-  \caption{The 58 real flight photos searched from scratch, every retriever on both grids. R@$K$: share of photos with a top-$K$ candidate within 18.1~m; top-1 error: median distance of the best candidate; within 5~m: share of top-1 candidates within 5~m; found: correct LightGlue-verified fixes; fix error: median error of the correct fixes; time: one full relocalization including verification.}
+  \caption{Real flight photos searched from scratch}
   \label{tab:retrieval-real}
   \footnotesize\setlength{\tabcolsep}{3.5pt}
   \begin{tabular}{llrrrrrrrrr}
@@ -545,11 +545,11 @@ The test results indicate that the CNNs manage to find 47/58 photos on the dense
 
 The two CNNs each find 47 photos, but not the same 47. Both miss the seven unmatchable photos and three more (DJI\_0062, DJI\_0072 and DJI\_0078). In addition, EfficientNet-B0 misses DJI\_0079 and ResNet50 misses DJI\_0052. However, two of the photos that EfficientNet-B0 does not find from scratch, DJI\_0072 and DJI\_0079, are found during the flight, where the search starts near the estimate. Thus, a rough prior position helps retrieval, which is why the pipeline searches locally before it searches the whole map. The same comparison on 100 simulated queries per condition shows where each retriever is strong.
 
-The simulated benchmark is built as follows. For each of the five conditions 100 query positions are drawn at random over the area covered by patch centers and the camera image is rendered there. In the conditions with rotation, the heading is drawn from the full circle, $-180^\circ$ to $180^\circ$, so the retriever is tested on any orientation. The query is then de-rotated with the simulated compass ($3^\circ$ of noise) and assumed to be at nominal altitude, so the $\pm 10\%$ scale change is unknown to the retriever. Every retriever receives the same query image. The top 10 candidates give the recall figures, and the top 5 are verified with LightGlue. The full results are given in Table~\ref{tab:retrieval-sim}.
+The simulated benchmark is built as follows. For each of the five conditions 100 query positions are drawn at random over the area covered by patch centers and the camera image is rendered there. In the conditions with rotation, the heading is drawn from the full circle, $-180^\circ$ to $180^\circ$, so the retriever is tested on any orientation. The query is then de-rotated with the simulated compass ($3^\circ$ of noise) and assumed to be at nominal altitude, so the $\pm 10\%$ scale change is unknown to the retriever. Every retriever receives the same query image. The top 10 candidates give the recall figures, and the top 5 are verified with LightGlue. The full results, with the same metrics on both grids, are given in Table~\ref{tab:retrieval-sim}.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Simulated retrieval benchmark: 100 queries per condition, on Fabris's 25.6~m grid and the dense 6.4~m grid. R@$K$: share of queries with a top-$K$ candidate within 18.1~m; top-1 error: median distance of the best candidate; within 5~m: share of top-1 candidates within 5~m; correct and false: shares of LightGlue-verified fixes.}
+  \caption{Simulated retrieval benchmark}
   \label{tab:retrieval-sim}
   \footnotesize\setlength{\tabcolsep}{3.5pt}
   \begin{tabular}{lllrrrrrrr}
@@ -600,7 +600,7 @@ The four augmentation conditions show which kind of change hurts which retriever
 
 \begin{table}[!htbp]
   \centering
-  \caption{Effect of each augmentation condition on the dense 6.4~m grid. Each cell: Recall@1 / Recall@5 / share of correct verified fixes, 100 queries per condition.}
+  \caption{Effect of each augmentation condition on the dense grid}
   \label{tab:retrieval-conditions}
   \small
   \begin{tabular}{lccc}
@@ -622,11 +622,11 @@ It is interesting to observe that the autoencoder behaves the other way around a
 
 At the same time, it should be stated that when the autoencoder is right it is very precise: in the realistic condition its top-1 lands within 5~m for 54\% of the queries, against 25\% for EfficientNet-B0, because it was trained on this exact map and its fingerprint is sharp at the patch center. The CNNs are less precise but far more robust and they put the right area in their top 5 much more often (0.89 against 0.72, for EfficientNet-B0 and the autoencoder). Considering the fact that there was no fine-tuning involved for the CNNs and they operate with the pretrained weights, they have the potential to perform even more accurately given appropriate fine-tuning, which is left for future work.
 
-Since after the retrieval step LightGlue measures the exact position anyway, robustness is what matters when it comes to retrievers and the verified-fix rate in the realistic condition reflects that: 94\% for EfficientNet-B0, 82\% for ResNet50 and 75\% for the autoencoder. The gate sweep (Table~\ref{tab:gate}) confirms the threshold of 50 agreeing pairs: on the dense grid no retriever produced a false fix at any threshold from 15 to 150 and raising the threshold from 50 to 150 costs only about one percentage point of accepted fixes. The sweep pools the 500 queries of all five augmentation conditions.
+Since after the retrieval step LightGlue measures the exact position anyway, robustness is what matters when it comes to retrievers and the verified-fix rate in the realistic condition reflects that: 94\% for EfficientNet-B0, 82\% for ResNet50 and 75\% for the autoencoder. The gate sweep (Table~\ref{tab:gate}) gives the share of queries with an accepted fix for minimum-match thresholds from 15 to 150 and confirms the threshold of 50 agreeing pairs: on the dense grid no retriever produced a false fix at any threshold from 15 to 150 and raising the threshold from 50 to 150 costs only about one percentage point of accepted fixes. The sweep pools the 500 queries of all five augmentation conditions.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Gate sweep: share of queries with an accepted fix (\%) for minimum-match thresholds from 15 to 150, pooled over the 500 simulated queries of the five augmentation conditions. All accepted fixes were correct except for the autoencoder on the 25.6~m grid, where 1.14\%, 1.16\%, 0.62\%, 0.65\%, 0.66\%, 0.70\% of the accepted fixes were false at the six thresholds.}
+  \caption{Gate sweep of the verification threshold}
   \label{tab:gate}
   \small
   \begin{tabular}{rrrrrrr}
@@ -651,7 +651,7 @@ A crop moved 6.4~m from a patch center is still matched to that patch in 98\% of
 
 \begin{table}[!htbp]
   \centering
-  \caption{Shift test: share of crops whose nearest patch is ranked first, for crops of the color-corrected map cut at a given distance from 200 patch centers of Fabris's grid in a random direction.}
+  \caption{Shift test of the three retrievers}
   \label{tab:shift-retrievers}
   \small
   \begin{tabular}{rrrr}
@@ -671,11 +671,11 @@ A crop moved 6.4~m from a patch center is still matched to that patch in 98\% of
 
 The autoencoder collapses between 3.2 and 6.4~m, while the CNNs lose only a few points there and still find the right patch in most cases at 9.6~m. Half the spacing of the dense grid is 3.2~m along each axis, which is exactly where the autoencoder is still reliable. Diagonally, however, a query can lie up to 4.5~m from the nearest patch center, between the tested offsets of 3.2~m (96\%) and 6.4~m (37.5\%), so the autoencoder's reliability in that worst case is not directly measured. Even so, the shift test is yet another quantitative reason why the 6.4~m spacing was chosen for the dense grid.
 
-Flying the 58 real photos as one 3.5~km flight through each pipeline gives the results in Table~\ref{tab:reloc-all-real}.
+Flying the 58 real photos as one 3.5~km flight through each pipeline gives the results in Table~\ref{tab:reloc-all-real}. In this table and in Table~\ref{tab:reloc-all-sim}, +ResNet50 and +EffNet-B0 denote VO+map with that retriever as the relocalization step. Map fixes and relocalizations are given as accepted/attempted, and escalations count the map-check failures that led to a relocalization.
 
 \begin{table}[!htbp]
   \centering
-  \caption{The real photo flight (58 photos, 3.5~km) with all pipelines. Map fixes and relocalizations: accepted/attempted; escal.: map-check failures escalated to a relocalization. VO: odometry alone; VO+map: with map checks; +AE, +ResNet50, +EffNet-B0: VO+map with that retriever for relocalization; AE only: Fabris's original method.}
+  \caption{The real photo flight with all pipelines}
   \label{tab:reloc-all-real}
   \small\setlength{\tabcolsep}{3pt}
   \begin{tabular}{lrrrrrrrrr}
@@ -699,11 +699,11 @@ The per-photo log makes the flight easy to narrate. Six gaps between consecutive
 
 The errors between fixes have an equally clear cause. The two stretches where the error climbs, frames 21--29 (up to 33~m) and frames 38--41 (up to 22~m), contain six of the seven unmatchable photos, frames 25--28 and 40--41. On those frames no map check can succeed, so the drone flies on odometry alone over steps of 50 to 100~m, and the error is removed only at the next photo that matches the map (frames 30 and 42). The counts in the table reflect this: 10 of the 15 map checks attempted succeed, and all 4 relocalizations do.
 
-The simulated flights with the three complete pipelines give the results in Table~\ref{tab:reloc-all-sim}.
+The simulated flights with the three complete pipelines give the results in Table~\ref{tab:reloc-all-sim}, five flights of 2~km per scenario. The errors are medians over the flights, a flight counts as recovered if it ends within 5~m, and no pipeline produced a false fix.
 
 \begin{table}[!htbp]
   \centering
-  \caption{Simulated flights with all pipelines, 5 flights of 2~km per scenario. Errors are medians over the flights; recovered: flights ending within 5~m. No pipeline produced a false fix. Time per image on a T4 GPU, without rendering the simulated camera image. VO: odometry alone; VO+map: with map checks; +AE, +ResNet50, +EffNet-B0: VO+map with that retriever for relocalization; AE only: Fabris's original method.}
+  \caption{Simulated flights with all pipelines}
   \label{tab:reloc-all-sim}
   \small\setlength{\tabcolsep}{3.5pt}
   \begin{tabular}{llrrrrrr}
@@ -739,7 +739,7 @@ The long flight is identical for all three because relocalization is never calle
 
 \begin{table}[!htbp]
   \centering
-  \caption{Speed of the retrievers on a T4 GPU and on CPU. Speed test: 20 single patches after a warm-up; benchmark median: median over the queries of the realistic condition of the retrieval benchmark. Parameter counts cover only the layers used.}
+  \caption{Speed of the retrievers}
   \label{tab:speed}
   \small
   \begin{tabular}{lrrr}
