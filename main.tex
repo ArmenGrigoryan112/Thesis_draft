@@ -820,6 +820,66 @@ It is important to note that this simulation is a best-case scenario. The model 
 
 \section{Results: simulation and real photo flight}
 \label{sec:ekf-results}
+Within the scope of this thesis, we have compared three modes of combining the measurements in our complete pipeline: the previous rules, the EKF with constant-velocity prediction and the EKF with the simulated IMU data. Since we have verified SuperPoint + LightGlue to be the superior feature extractor and matcher (Chapter~\ref{chap:vo}), and EfficientNet-B0 to be as effective as the other retrievers in accuracy while being by far the smallest in terms of parameters (Chapter~\ref{chap:relocalization}), we have therefore tested the three modes with this configuration of the pipeline. The simulation uses four scenarios with five seeds each, all with EfficientNet-B0 on the dense grid. The results are given in Table~\ref{tab:ekf-sim}.
+
+% TODO: fill in Table 6.1 (source: ekf_nav_pooled_20261108_1616.csv)
+\begin{table}[!htbp]
+  \centering
+  \caption{Simulated flights with the rules, the EKF and the EKF with IMU}
+  \label{tab:ekf-sim}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: ekf\_nav\_pooled\_20261108\_1616.csv).}}
+\end{table}
+
+As evident from Table~\ref{tab:ekf-sim}, when the camera works the whole time (long flight, unknown start) all three modes are equivalent, ending about 0.2~m from the truth with an ATE of about 0.3~m. These results are expected, since the map checks already remove the drift in the sections of the flight where visual data is still received, so the filter is not needed here. The difference appears during the 12-frame blackout (about 50~s). On a straight leg the largest error drops from 246~m with the rules to 105~m with the EKF and to 3.9~m with the EKF and IMU. When the drone keeps turning while blind, it is 92~m with the rules, 317~m with the plain EKF and 5.8~m with the IMU. The plain EKF is worse than the rules in turns because constant-velocity prediction carries the estimate in a straight line while the real drone turns away, whereas the rules simply leave the estimate where it was, which happens to be closer. Only inertial data can follow the drone through a blackout, and with it the drone stays within about 4--6~m for 50~s instead of drifting 100--300~m. The medians do not show how much the plain EKF varies from flight to flight, so the largest error of every blackout flight is listed in Table~\ref{tab:ekf-per-flight}.
+
+% TODO: fill in Table 6.2 (source: ekf_nav_per_flight_20261108_1616.csv)
+\begin{table}[!htbp]
+  \centering
+  \caption{Largest error of every blackout flight}
+  \label{tab:ekf-per-flight}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: ekf\_nav\_per\_flight\_20261108\_1616.csv).}}
+\end{table}
+
+The rules give almost the same number on four of the five straight legs, about 246~m, because they simply hold the last position while the drone flies 12 steps of 20.5~m away from it. That makes them a weak baseline for this scenario: any method that keeps moving in roughly the right direction will beat it. The plain EKF ranges from 19~m to 204~m on the straight leg, depending on how good its velocity estimate was at the moment the camera went dark. With the IMU the worst flight of the ten reaches 12.6~m and the others stay below 8~m.
+
+The NEES values in the simulation (0.3--0.6, against an ideal of 2) show that the filter is too cautious there. It believes the error could be larger than it really is, because the simulated measurements are more accurate than the noise values assume. The one rejected fix in each scenario of the EKF without IMU (seed 101) led to an escalation and a successful relocalization.
+
+On the real photos, flown as one flight without IMU, the results are those in Table~\ref{tab:ekf-real}.
+
+% TODO: fill in Table 6.3 (source: ekf_real_sequence_20261108_1616.csv and ekf_real_frames_20261108_1616.csv)
+\begin{table}[!htbp]
+  \centering
+  \caption{The real photo flight with the rules and the EKF}
+  \label{tab:ekf-real}
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Data to be added (source: ekf\_real\_sequence\_20261108\_1616.csv and ekf\_real\_frames\_20261108\_1616.csv).}}
+\end{table}
+
+The EKF ends closer to GPS (1.4~m against 2.3~m) and, most importantly, it knows how lost it is. The true position was inside its search radius on every photo, against 52\% for the rules, and its NEES of 1.33, with 98\% of photos within the 95\% bound, is consistent with the noise values chosen for the real photos. Its ATE is higher, 16.3~m against 10.5~m, and the per-photo log shows why. Photo 49 was taken 34~s and 106~m after the previous one. Constant-velocity prediction over 34~s placed the estimate 89~m off and grew the search radius to about 400~m. In that large area the retrieval did not find a verified place, so the drone was lost on that photo and recovered on the next one, 0.96~m from the GPS. The rules, by luck of their fixed increments, searched a smaller area and found it there. Without that single photo the two modes are equivalent: an ATE of 11.3~m against 10.6~m, with the same median error of 1.8~m.
+
+The important takeaway here is that the EKF is useful both with and without the IMU data. With inertial data, the filter keeps the drone localized through camera blackouts (in simulation). Without it, the filter's main gain is a reliable estimate of its own uncertainty, which makes the decisions between map check and relocalization trustworthy. Without inertial data the filter does not improve the accuracy, and while the drone turns blind it is worse than the rules. The blackout results should also be read with one limit taken into account: the noise values of the filter were set on the same five simulated flights on which these results are reported.
+
+Figure~\ref{fig:ekf-turn} shows the blackout-while-turning flight (seed 26), with the trajectory of each mode on the map and the error and search radius over time on a logarithmic axis. Figure~\ref{fig:ekf-real} shows the real photo flight with the same two panels.
+
+% TODO: add the figure file (blackout-while-turning flight, seed 26)
+\begin{figure}[!htbp]
+  \centering
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Figure to be added (blackout-while-turning flight, seed 26).}}
+  \caption{Blackout while turning with the three modes}
+  \label{fig:ekf-turn}
+\end{figure}
+
+In Figure~\ref{fig:ekf-turn}, during the blind frames (grey band) the plain EKF's error (blue) climbs to about 300~m as it extrapolates in a straight line, the rules alone (orange) reach about 90~m and the EKF with the IMU (green) stays below about 13~m on this seed. All three recover at the first image after the blackout.
+
+% TODO: add the figure file (real photo flight, rules vs EKF)
+\begin{figure}[!htbp]
+  \centering
+  \fbox{\parbox{0.8\textwidth}{\centering\small\textbf{Placeholder.} Figure to be added (real photo flight, rules and EKF).}}
+  \caption{The real photo flight with the rules and the EKF}
+  \label{fig:ekf-real}
+\end{figure}
+
+In Figure~\ref{fig:ekf-real}, the EKF's search radius (dotted) stays above its error on every photo, while the radius of the rules repeatedly falls below their error. The single blue spike is the long gap at photo 49 discussed above.
+
 
 \chapter{Evaluation on real flights}
 \label{chap:evaluation}
