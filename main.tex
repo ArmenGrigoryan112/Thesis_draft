@@ -881,7 +881,7 @@ Figure~\ref{fig:ekf-turn} shows the blackout-while-turning flight (seed 26), wit
 
 The NEES values in the simulation (0.3--0.6, against an ideal of 2) show that the filter is too cautious there. It believes the error could be larger than it really is, because the simulated measurements are more accurate than the noise values assume. The one rejected fix in each scenario of the EKF without IMU (seed 101) led to an escalation and a successful relocalization.
 
-On the real photos, flown as one flight without IMU, the results are those in Table~\ref{tab:ekf-real}. This run is separate from the one in Chapter~\ref{chap:relocalization}, so the rules end 2.3~m from GPS here, against 2.0~m in Table~\ref{tab:reloc-all-real}.
+On the real photos, flown as one flight without IMU, the results are those in Table~\ref{tab:ekf-real}. Note that the rules row differs slightly from Table~\ref{tab:reloc-all-real} (2.3~m against 2.0~m final error) because it comes from a separate run of the same pipeline: the map fixes and relocalizations are identical in both.
 
 \begin{table}[!htbp]
   \centering
