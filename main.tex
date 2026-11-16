@@ -251,7 +251,8 @@ The remaining two apply to the EKF only. NEES (normalized estimation error squar
 
 \subsection{Speed}
 \label{sec:metrics-speed}
-The speed metrics are the fingerprint time per retriever on GPU and CPU, the search time on the dense grid, and the database build time and size. They are collected in the speed table of Section~\ref{sec:reloc-comparison}, which is measured in a fixed way. Twenty map patches are fingerprinted one at a time on the GPU (after a warm-up) and the median time is kept. The same network is then copied to the CPU and timed on five patches. The search time is the cosine comparison plus the selection of ten candidates on the dense grid, averaged over ten repetitions. The table also records each network's parameter count and the size and build time of its two databases. Because a short timing test can differ from the time measured during a long run, the GPU fingerprint time is also reported as the median over all queries of the retrieval benchmark.
+% TODO: describe how speed is measured on the Jetson Orin Nano
+\fbox{\parbox{0.9\textwidth}{\small\textbf{Placeholder.} How the speed is measured on the Jetson Orin Nano is to be described here.}}
 
 \chapter{Visual odometry}
 \label{chap:vo}
@@ -517,26 +518,26 @@ In terms of implementation, both networks come from the torchvision library. Res
 
 \section{Comparison}
 \label{sec:reloc-comparison}
-At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue. Table~\ref{tab:retrieval-real} reports the retrieval metrics of Section~\ref{sec:metrics-retrieval} for every retriever on both grids: Recall@$K$, the median distance of the top-1 candidate and the share of top-1 candidates within 5~m. The column `found' counts the correct LightGlue-verified fixes, the fix error is the median error of those fixes, and the time is that of one full relocalization including verification.
+At this stage, all of the available 58 real flight photos were searched from scratch, without any additional information to the retrievers. The top 5 candidates were verified by LightGlue. Table~\ref{tab:retrieval-real} reports the retrieval metrics of Section~\ref{sec:metrics-retrieval} for every retriever on both grids: Recall@$K$, the median distance of the top-1 candidate and the share of top-1 candidates within 5~m. The column `found' counts the correct LightGlue-verified fixes, and the fix error is the median error of those fixes.
 
 \begin{table}[!htbp]
   \centering
   \caption{Real flight photos searched from scratch}
   \label{tab:retrieval-real}
   \footnotesize\setlength{\tabcolsep}{3.5pt}
-  \begin{tabular}{llrrrrrrrrr}
+  \begin{tabular}{llrrrrrrrr}
     \toprule
-    & & & & & Top-1 & Top-1 & & False & Fix & Time \\
-    Retriever & Grid & R@1 & R@5 & R@10 & err.\ (m) & ${\le}5$~m & Found & fixes & err.\ (m) & (s) \\
+    & & & & & Top-1 & Top-1 & & False & Fix \\
+    Retriever & Grid & R@1 & R@5 & R@10 & err.\ (m) & ${\le}5$~m & Found & fixes & err.\ (m) \\
     \midrule
-    AE & 25.6~m & 0.05 & 0.09 & 0.10 & 410.6 & 0.03 & 11/58 & 0 & 1.31 & 1.31 \\
-     & 6.4~m & 0.38 & 0.45 & 0.48 & 259.4 & 0.34 & 28/58 & 0 & 1.16 & 1.34 \\
+    AE & 25.6~m & 0.05 & 0.09 & 0.10 & 410.6 & 0.03 & 11/58 & 0 & 1.31 \\
+     & 6.4~m & 0.38 & 0.45 & 0.48 & 259.4 & 0.34 & 28/58 & 0 & 1.16 \\
     \addlinespace
-    ResNet50 & 25.6~m & 0.38 & 0.66 & 0.74 & 23.4 & 0.05 & 44/58 & 0 & 1.19 & 1.32 \\
-     & 6.4~m & 0.55 & 0.67 & 0.81 & 15.3 & 0.14 & 47/58 & 0 & 1.15 & 1.32 \\
+    ResNet50 & 25.6~m & 0.38 & 0.66 & 0.74 & 23.4 & 0.05 & 44/58 & 0 & 1.19 \\
+     & 6.4~m & 0.55 & 0.67 & 0.81 & 15.3 & 0.14 & 47/58 & 0 & 1.15 \\
     \addlinespace
-    EffNet-B0 & 25.6~m & 0.47 & 0.66 & 0.71 & 19.0 & 0.07 & 44/58 & 0 & 1.20 & 1.33 \\
-     & 6.4~m & 0.66 & 0.76 & 0.81 & 10.7 & 0.19 & 47/58 & 0 & 1.18 & 1.33 \\
+    EffNet-B0 & 25.6~m & 0.47 & 0.66 & 0.71 & 19.0 & 0.07 & 44/58 & 0 & 1.20 \\
+     & 6.4~m & 0.66 & 0.76 & 0.81 & 10.7 & 0.19 & 47/58 & 0 & 1.18 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -678,17 +679,17 @@ Flying the 58 real photos as one 3.5~km flight through each pipeline gives the r
   \caption{The real photo flight with all pipelines}
   \label{tab:reloc-all-real}
   \small\setlength{\tabcolsep}{3pt}
-  \begin{tabular}{lrrrrrrrrr}
+  \begin{tabular}{lrrrrrrrr}
     \toprule
-    & Final & ATE & Max & Within & Map & Re- & & False & ms per \\
-    Pipeline & error (m) & (m) & error (m) & 5~m (\%) & fixes & loc. & Escal. & fixes & image \\
+    & Final & ATE & Max & Within & Map & Re- & & False \\
+    Pipeline & error (m) & (m) & error (m) & 5~m (\%) & fixes & loc. & Escal. & fixes \\
     \midrule
-    VO & 588.54 & 224.44 & 638.28 & 6.9 & 0/0 & 0/0 & 0 & 0 & 207 \\
-    VO+map & 553.67 & 211.42 & 611.92 & 44.8 & 7/25 & 0/0 & 0 & 0 & 317 \\
-    +AE & 194.56 & 33.76 & 194.56 & 69.0 & 10/15 & 3/5 & 3 & 0 & 434 \\
-    +ResNet50 & 1.91 & 10.46 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 & 392 \\
-    +EffNet-B0 & 1.99 & 10.45 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 & 365 \\
-    AE only & 450.37 & 536.30 & 948.07 & 0.0 & 0/0 & 0/0 & 0 & 0 & 111 \\
+    VO & 588.54 & 224.44 & 638.28 & 6.9 & 0/0 & 0/0 & 0 & 0 \\
+    VO+map & 553.67 & 211.42 & 611.92 & 44.8 & 7/25 & 0/0 & 0 & 0 \\
+    +AE & 194.56 & 33.76 & 194.56 & 69.0 & 10/15 & 3/5 & 3 & 0 \\
+    +ResNet50 & 1.91 & 10.46 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 \\
+    +EffNet-B0 & 1.99 & 10.45 & 33.41 & 72.4 & 10/15 & 4/4 & 3 & 0 \\
+    AE only & 450.37 & 536.30 & 948.07 & 0.0 & 0/0 & 0/0 & 0 & 0 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -706,61 +707,38 @@ The simulated flights with the three complete pipelines give the results in Tabl
   \caption{Simulated flights with all pipelines}
   \label{tab:reloc-all-sim}
   \small\setlength{\tabcolsep}{3.5pt}
-  \begin{tabular}{llrrrrrr}
+  \begin{tabular}{llrrrrr}
     \toprule
-    & & Final & ATE & Max & Within & Re- & ms per \\
-    Scenario & Pipeline & error (m) & (m) & error (m) & 5~m (\%) & covered & image \\
+    & & Final & ATE & Max & Within & Re- \\
+    Scenario & Pipeline & error (m) & (m) & error (m) & 5~m (\%) & covered \\
     \midrule
-    Long flight & VO & 1.57 & 1.65 & 3.18 & 99.8 & 5/5 & 274 \\
-     & VO+map & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 335 \\
-     & +AE & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 328 \\
-     & +ResNet50 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 330 \\
-     & +EffNet-B0 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 & 331 \\
-     & AE only & 267.64 & 293.78 & 686.83 & 3.4 & 0/5 & 65 \\
+    Long flight & VO & 1.57 & 1.65 & 3.18 & 99.8 & 5/5 \\
+     & VO+map & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 \\
+     & +AE & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 \\
+     & +ResNet50 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 \\
+     & +EffNet-B0 & 0.18 & 0.28 & 0.74 & 100.0 & 5/5 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 3.4 & 0/5 \\
     \addlinespace
-    Blackout & VO & 228.03 & 193.90 & 340.11 & 39.4 & 0/5 & 235 \\
-     & VO+map & 175.20 & 194.90 & 340.94 & 44.8 & 1/5 & 385 \\
-     & +AE & 0.20 & 52.28 & 246.03 & 87.7 & 5/5 & 313 \\
-     & +ResNet50 & 0.20 & 52.28 & 246.03 & 87.9 & 5/5 & 309 \\
-     & +EffNet-B0 & 0.17 & 52.28 & 246.03 & 88.1 & 5/5 & 303 \\
-     & AE only & 173.42 & 275.10 & 671.64 & 4.4 & 0/5 & 63 \\
+    Blackout & VO & 228.03 & 193.90 & 340.11 & 39.4 & 0/5 \\
+     & VO+map & 175.20 & 194.90 & 340.94 & 44.8 & 1/5 \\
+     & +AE & 0.20 & 52.28 & 246.03 & 87.7 & 5/5 \\
+     & +ResNet50 & 0.20 & 52.28 & 246.03 & 87.9 & 5/5 \\
+     & +EffNet-B0 & 0.17 & 52.28 & 246.03 & 88.1 & 5/5 \\
+     & AE only & 173.42 & 275.10 & 671.64 & 4.4 & 0/5 \\
     \addlinespace
-    Unknown start & VO & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 271 \\
-     & VO+map & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 & 328 \\
-     & +AE & 0.20 & 0.28 & 0.71 & 100.0 & 5/5 & 338 \\
-     & +ResNet50 & 0.22 & 0.29 & 0.74 & 100.0 & 5/5 & 341 \\
-     & +EffNet-B0 & 0.18 & 0.27 & 0.70 & 100.0 & 5/5 & 342 \\
-     & AE only & 267.64 & 293.78 & 686.83 & 2.2 & 0/5 & 72 \\
+    Unknown start & VO & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 \\
+     & VO+map & 272.21 & 271.33 & 288.07 & 0.0 & 0/5 \\
+     & +AE & 0.20 & 0.28 & 0.71 & 100.0 & 5/5 \\
+     & +ResNet50 & 0.22 & 0.29 & 0.74 & 100.0 & 5/5 \\
+     & +EffNet-B0 & 0.18 & 0.27 & 0.70 & 100.0 & 5/5 \\
+     & AE only & 267.64 & 293.78 & 686.83 & 2.2 & 0/5 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The long flight is identical for all three because relocalization is never called on it: the map checks keep the drone on track. In the other two scenarios a single relocalization is needed per flight and every retriever succeeds, so the simulation cannot rank them. The table also gives the average time per image on the T4 GPU (Google Colab), measured without the rendering of the simulated camera image: 0.23 to 0.27~s with odometry alone, 0.33 to 0.38~s with map checks, 0.30 to 0.34~s for the full pipelines, and 0.06 to 0.07~s for Fabris's method, which does no matching. The speed of the retrievers themselves is given in Table~\ref{tab:speed}.
+The long flight is identical for all three because relocalization is never called on it: the map checks keep the drone on track. In the other two scenarios a single relocalization is needed per flight and every retriever succeeds, so the simulation cannot rank them.
 
-\begin{table}[!htbp]
-  \centering
-  \caption{Speed of the retrievers}
-  \label{tab:speed}
-  \small
-  \begin{tabular}{lrrr}
-    \toprule
-    & AE & ResNet50 & EffNet-B0 \\
-    \midrule
-    Weights & Fabris & Places365 & ImageNet \\
-    Fingerprint size & 2048 & 2048 & 1280 \\
-    Parameters (M) & 268.81 & 23.51 & 4.01 \\
-    GPU fingerprint, speed test (ms) & 170.6 & 48.1 & 47.0 \\
-    GPU fingerprint, benchmark (ms) & 47.4 & 14.3 & 12.6 \\
-    CPU fingerprint (ms) & 3988 & 685 & 87 \\
-    Dense grid search (ms) & 20.7 & 45.1 & 16.9 \\
-    25.6~m grid database (MB) & 8.2 & 8.2 & 5.2 \\
-    Dense database (MB) & 128.8 & 128.8 & 80.5 \\
-    Dense database build (s) & 1104 & 103 & 57 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-On a T4 GPU, one fingerprint takes about 13~ms with EfficientNet-B0 and 14~ms with ResNet50 during the retrieval benchmark, against 44--54~ms with the autoencoder. The two GPU rows of Table~\ref{tab:speed} differ by a factor of three to four: the speed test timed 20 single images right after the databases were loaded, while the benchmark row is the median over the queries of a long run. GPU times of a few milliseconds also vary between runs, and in a repeated measurement EfficientNet-B0 was even slower than ResNet50 (26 against 16~ms). The safe conclusion is that the autoencoder is several times slower than both CNNs on a GPU, while only the CPU separates the two CNNs: one fingerprint takes 4.0~s with the autoencoder, 0.69~s with ResNet50 and 0.09~s with EfficientNet-B0. Building the dense database takes about 1 minute with EfficientNet-B0 and 18 minutes with the autoencoder. A full relocalization, including LightGlue verification, takes about 1.3~s in all three cases, because LightGlue dominates its cost. The parameter counts cover only the layers that are used, without the removed classification heads. The search itself is cheap, 17 to 45~ms for all 16{,}492 patches, and the dense database of EfficientNet-B0 takes 81~MB of memory against 129~MB for the two 2048-number fingerprints.
+Beyond accuracy, the retrievers differ in size, which does not depend on the machine they run on: EfficientNet-B0 has 4.0 million parameters and a 1280-number fingerprint, against 23.5 and 268.8 million parameters and 2048-number fingerprints for ResNet50 and the autoencoder, so its dense database takes 81~MB against 129~MB.
 
 In conclusion, EfficientNet-B0 is equal to or better than the alternatives and much lighter, and it is the retriever used from here on, even though the autoencoder was trained on this exact map and the CNNs were not.
 
