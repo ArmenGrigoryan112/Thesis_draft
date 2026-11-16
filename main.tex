@@ -768,9 +768,85 @@ In conclusion, EfficientNet-B0 is equal to or better than the alternatives and m
 \chapter{Sensor fusion with the EKF}
 \label{chap:ekf}
 \section{Limits of the rule-based pipeline}
+\label{sec:ekf-limits}
+Up until this point the measurements in the pipeline were combined by fixed rules, which have three weaknesses. First, the uncertainty $r$ is a guess: it grows by a fixed 1~m or 25~m regardless of what actually happened during the flight, yet it decides whether a map check or a relocalization is run and how large an area is searched. On the real photo flight the rules believed they were within 6--10~m while being 21--33~m off, and the true position lay inside $r$ on only 52\% of the photos. Second, every measurement is trusted equally: an accepted fix simply replaces the position, whether it came from 51 agreeing matches or from 400, so a shaky odometry step counts as much as a solid one. Third, the rules have no way to use the other sensors of the drone. A real drone carries an IMU that measures its motion 100 times per second, and that information is lost. The extended Kalman filter (EKF) addresses all three. It replaces only the bookkeeping side of the pipeline, and everything else stays the same as described in Chapter~\ref{chap:relocalization}.
+
 \section{Filter design}
-\section{Simulated IMU (DJI Phantom 4)}
+\label{sec:ekf-design}
+A Kalman filter keeps two things: an estimate of the state, and a measure of how uncertain that estimate is (the covariance $P$). It works in two phases that repeat for every image: prediction and update. In the prediction, the estimate is moved forward in time with a motion model and its uncertainty grows. In the update, a measurement corrects the estimate and its uncertainty shrinks. How far a measurement moves the estimate depends on how much the filter trusts it compared with its own prediction.
+
+The EKF keeps a state with four parts, all in meters in the map frame: the position $p$, the velocity $v$, the accelerometer bias $b$, and a copy $c$ of the position at the current keyframe. (The position is written $P$ in Chapter~\ref{chap:vo}. Here it is written $p$, because $P$ denotes the covariance.) As a vector, the state is
+\begin{equation}
+  x = [\,p_x,\ p_y,\ v_x,\ v_y,\ b_x,\ b_y,\ c_x,\ c_y\,]^{\top},
+  \label{eq:ekf-state}
+\end{equation}
+with the first axis along the map's columns (east) and the second along its rows (south). Heading and scale are not part of the state. They stay in the attitude $G$, as before.
+
+The copy is needed because the odometry does not measure the position. It measures the movement since the keyframe, $p - c$. Without keeping $c$ in the state, the filter would treat the keyframe position as exact and become overconfident. Whenever a new keyframe is set, the position and its uncertainty are copied into $c$, so that right after the copy the difference $p - c$ is exactly zero. The bias $b$ is used only in the IMU version, where the filter estimates it. It is expressed in the drone's body frame, because that is where the sensor sits, and its initial uncertainty is 5~mg per axis. In the version without IMU it is set to zero, which switches the bias off.
+
+At a known start the position uncertainty is 1~m, while at the unknown start it is 5000~m, which forces a search of the whole map since it is bigger than the map. The initial velocity uncertainty is 5~m/s.
+
+\paragraph{Prediction.}
+The prediction moves the state $x$ and its covariance $P$ with the transition matrix $F$ and adds the process noise $Q$:
+\begin{equation}
+  x \leftarrow F x, \qquad P \leftarrow F P F^{\top} + Q
+  \label{eq:ekf-predict}
+\end{equation}
+Two versions of the prediction are compared. The basic EKF uses a constant-velocity model, $p \leftarrow p + v\,\mathrm{d}t$, with a random-acceleration process noise of $q = 1$~m$^2$/s$^3$ to account for unmodeled motion. The time step $\mathrm{d}t$ is fixed at 4.1~s in simulation and taken from the EXIF timestamps for the real photos (between 6 and 34~s). With this model the position variance grows by $q\,\mathrm{d}t^3/3$, the velocity variance by $q\,\mathrm{d}t$, and their covariance by $q\,\mathrm{d}t^2/2$. The cubic term explains the behavior on long gaps. Over one simulated frame of 4.1~s the position uncertainty grows by about 5~m, but over a gap of 34~s it grows by more than 100~m, so the search radius reaches several hundred meters.
+
+The IMU version instead integrates the accelerometer at 100~Hz. From each sample $a_m$, taken over $\delta = 0.01$~s, the estimated bias is subtracted. The sample is then rotated from the drone's body frame into the map frame with the current heading $\psi$, and the result is integrated to update velocity and position:
+\begin{equation}
+  a = R(\psi)\,(a_m - b), \qquad p \leftarrow p + v\,\delta + \tfrac{1}{2}\,a\,\delta^2, \qquad v \leftarrow v + a\,\delta
+  \label{eq:ekf-imu}
+\end{equation}
+The heading $\psi$ is obtained by integrating the gyroscope from the last vision-based heading measurement. The process noise accounts for three effects: accelerometer noise, bias drift, and heading uncertainty. A heading error turns the measured acceleration by the same angle, and unlike the sensor noise it does not average out over the samples of one frame. The heading uncertainty grows with the time $t$ since the last image:
+\begin{equation}
+  \sigma_{\psi} = \sqrt{(0.5^{\circ})^2 + (0.05\,^{\circ}/\mathrm{s} \cdot t)^2}
+  \label{eq:ekf-heading}
+\end{equation}
+The rotation by the heading makes this version nonlinear, which is why the filter is called ``extended''. With the constant-velocity model alone it reduces to an ordinary Kalman filter.
+
+\paragraph{Update.}
+A measurement $z$ is compared with what the state predicts for it, $Hx$, where $H$ selects the relevant part of the state. For an odometry step, $z$ is the measured movement since the keyframe and $Hx = p - c$. For a map check or a relocalization, $z$ is the measured position and $Hx = p$. The difference $\nu$ and its expected spread $S$ are
+\begin{equation}
+  \nu = z - H x, \qquad S = H P H^{\top} + \sigma^2 I
+  \label{eq:ekf-innovation}
+\end{equation}
+where $\sigma$ is the noise of that measurement. The state and the covariance are then corrected with the gain $K$:
+\begin{equation}
+  K = P H^{\top} S^{-1}, \qquad x \leftarrow x + K\nu, \qquad P \leftarrow (I - KH)\,P\,(I - KH)^{\top} + \sigma^2 K K^{\top}
+  \label{eq:ekf-update}
+\end{equation}
+The result is that not every measurement is trusted equally. When the measurement is precise compared with the prediction, $K$ is large and the estimate moves almost fully to the measurement. When the measurement is noisy, the estimate barely moves. After an accepted odometry step or fix, the keyframe copy is reset, $c \leftarrow p$.
+
+The noise $\sigma$ says how much each measurement is trusted. For an odometry step with a measured movement $\Delta p$ and $n$ agreeing matches it is
+\begin{equation}
+  \sigma_{\mathrm{VO}} = \left(\sigma_0 + \kappa\,\lVert \Delta p \rVert\right)\cdot \max\!\left(1, \sqrt{100 / n}\right)
+  \label{eq:ekf-sigma-vo}
+\end{equation}
+with $\sigma_0 = 0.2$~m and $\kappa = 0.01$ in simulation, and $\sigma_0 = 0.3$~m and $\kappa = 0.05$ on the real photos, whose long gaps make odometry less accurate. The last factor inflates the noise when fewer than 100 matches agree, so a weak step counts less. A map check has a noise of 0.3~m in simulation and 1.5~m on the real photos, where it measured a median of 1.2~m from GPS. A relocalization has 0.3~m and 2.0~m. Two sets of values are used because a single set made the filter far too cautious in simulation. The real-photo values were chosen from the accuracy measured on the same 58 photos on which they are then evaluated, which is a limitation discussed with the results.
+
+Before a map check or a relocalization is used, it must pass a $\chi^2$ gate. Its distance from the prediction, measured in standard deviations, $d^2 = \nu^{\top} S^{-1} \nu$, must not exceed 13.82, the 99.9\% bound for two dimensions. A fix outside that bound is rejected and counts as a failed fix. Odometry steps are not gated. They are limited only by the 15-match and scale rules of Chapter~\ref{chap:vo}.
+
+The search radius is no longer a separate rule. It is read from the filter as three times the largest standard deviation of the position:
+\begin{equation}
+  r = 3\,\sqrt{\lambda_{\max}(P_{pp})}
+  \label{eq:ekf-radius}
+\end{equation}
+where $P_{pp}$ is the position block of the covariance and $\lambda_{\max}$ its largest eigenvalue. The decisions of Section~\ref{sec:reloc-why} stay the same: a map check while $r$ is at most 30~m, a relocalization above it. On a blind frame only the prediction runs, so $r$ grows as the motion model says instead of by a fixed 25~m. When an escalation is triggered, the position uncertainty is raised to at least 20~m in every direction, which gives an $r$ of at least 60~m, and a relocalization is run.
+
+Two details make the comparison with the rules fair. After an accepted fix the position is the filter's blended estimate, not the fix itself, while the heading and scale in $G$ are still taken directly from the fix. False fixes are counted on the raw fix in both modes, so the rules and the EKF are judged on the same quantity.
+
+\section{Simulated IMU}
+\label{sec:ekf-imu}
+Fabris's flight has no IMU log, so the IMU had to be simulated. DJI does not document which IMU chip the Phantom~4 uses, so the noise values are taken from the datasheet of the InvenSense MPU-6500, a consumer MEMS IMU of the same generation: an accelerometer noise density of 300~$\mu$g/$\sqrt{\mathrm{Hz}}$ and a gyroscope noise density of $0.01\,^{\circ}/\mathrm{s}/\sqrt{\mathrm{Hz}}$. The biases that remain after calibration are assumptions: 5~mg for the accelerometer and $0.05\,^{\circ}$/s for the gyroscope, with a bias drift of $10^{-4}$~m/s$^2$/$\sqrt{\mathrm{s}}$.
+
+The readings are generated from the simulated flight described in Section~\ref{sec:augmentations}, in which the drone flies a smooth curve through the waypoints at 5~m/s. The second derivative of that curve gives the true acceleration at 100~Hz, which is rotated into the drone's body frame with the true heading. A constant bias, drawn once per flight, its slow drift and white noise are then added. The gyroscope reading is the true turn rate plus a constant bias and its own white noise. One frame of 4.1~s therefore contains 410 IMU samples.
+
+It is important to note that this simulation is a best-case scenario. The model is two-dimensional: the drone does not tilt and there is no vibration, while on a real multirotor tilt and vibration are the main errors of accelerometer dead reckoning. The filter also knows the exact noise model that generated the data. The results with the IMU should therefore be read as proof that the fusion works as designed, not as a prediction for a real Phantom~4. The IMU is used only in simulation. The real photos are run without it.
+
 \section{Results: simulation and real photo flight}
+\label{sec:ekf-results}
 
 \chapter{Evaluation on real flights}
 \label{chap:evaluation}
