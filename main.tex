@@ -219,7 +219,7 @@ In the EKF testing, the drone flies a smooth curve (cubic spline) through the wa
 
 \section{Evaluation metrics}
 \label{sec:metrics}
-The metrics are the core of the evaluation, since they measure the accuracy with which the drone estimates its location in comparison with the reference position (which the drone never sees). The metrics are divided into four categories.
+The metrics are the core of the evaluation, since they measure the accuracy with which the drone estimates its location in comparison with the reference position (which the drone never sees). The metrics are divided into three categories. Speed is measured only on the final pipeline and is described together with its results in Section~\ref{sec:jetson-runtime}.
 
 \subsection{Odometry and flight accuracy}
 \label{sec:metrics-odometry}
@@ -248,11 +248,6 @@ The remaining two apply to the EKF only. NEES (normalized estimation error squar
   \mathrm{NEES}_k = e_k^{\top} P_k^{-1} e_k, \qquad e_k = \hat{p}_k - p_k
   \label{eq:nees}
 \end{equation}
-
-\subsection{Speed}
-\label{sec:metrics-speed}
-% TODO: describe how speed is measured on the Jetson Orin Nano
-\fbox{\parbox{0.9\textwidth}{\small\textbf{Placeholder.} How the speed is measured on the Jetson Orin Nano is to be described here.}}
 
 \chapter{Visual odometry}
 \label{chap:vo}
@@ -831,6 +826,10 @@ It is important to note that this simulation is a best-case scenario. The model 
 \section{Frozen configuration and protocol}
 \section{Inference on actual flight footages}
 \section{Runtime on the Jetson Orin Nano}
+\label{sec:jetson-runtime}
+% TODO: describe how speed is measured on the Jetson Orin Nano, then the results
+\fbox{\parbox{0.9\textwidth}{\small\textbf{Placeholder.} How the speed is measured on the Jetson Orin Nano, and the results, are to be added here.}}
+
 \section{Discussion}
 
 \chapter{Conclusions}
