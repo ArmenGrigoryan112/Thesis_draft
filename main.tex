@@ -75,7 +75,6 @@
 
 %we refer to http://ctan.mirrorcatalogs.com/macros/latex/contrib/sapthesis/sapthesis-doc.pdf for an exhaustive description of the sapthesis documentclass.
 
-
 \begin{document}
 
 \frontmatter
@@ -454,7 +453,6 @@ Two details complete the description. The crop is centered on the estimate round
 The effect of map checks can be seen in the VO (odometry alone) and VO+map (odometry with map checks) rows of Table~\ref{tab:reloc-all-sim} (five simulated flights of 2~km per scenario) and Table~\ref{tab:reloc-all-real} (the real photo flight). Both tables also contain the full pipelines of Chapter~\ref{chap:relocalization}.
 
 
-
 Clearly, on a normal flight it removes the drift almost entirely: the drone ends a median 0.18~m from the truth after 2~km and its largest error is a median 0.74~m, so relocalization is never needed. Tested alone on the real photos from 15~m off, it located 51 of 58 photos with a median error of 1.2~m. It cannot, however, bring back a drone that is already far off. After the blackout the estimate is about 250~m behind, so the map crop shows the wrong place and almost every check fails, and only one of the five flights recovers. With a wrong start it never succeeds at all. On the real photos only 7 of 25 attempts succeeded, because after each long gap the estimate was too far off. The map check therefore keeps a drone on track but cannot find a lost one. That gap is filled by relocalization.
 
 \chapter{Relocalization}
@@ -491,9 +489,7 @@ In other words, the test crops were cut to line up with the patches, whereas the
 
 Finally, the autoencoder was built into the pipeline as the relocalization step. Its results are in the rows VO+map, +AE (VO+map with the autoencoder as the relocalization step) and AE only (Fabris's original method) of Table~\ref{tab:reloc-all-sim} (simulated flights) and Table~\ref{tab:reloc-all-real} (the real photo flight), both given in full in Section~\ref{sec:reloc-comparison}.
 
-
 In the simulated flights, the autoencoder managed to recover two scenarios, where after the blackout and from a wrong start it relocalizes the system within 0.2~m from the actual location. Without it, the odometry + map checks stayed 175--272~m off. It is important to note that the maximum error of 246~m during the blackout is not a failure of localization. It is simply caused by the absence of data from the drone's camera. Fabris's autoencoder on its own ends 170--270~m off, because a single unverified top-1 guess per image is wrong too often.
-
 
 On the real photos, the autoencoder found 28/58 photos on the dense grid, 11/58 on his grid, with no wrong fix (Table~\ref{tab:retrieval-real}). Flown as one flight, the retriever relocalized the drone at three of the four gaps where odometry broke, 1--2~m from the GPS. At the last gap, the retriever found no verified place, so the flight ended 194.6~m off. Overall, the estimation was within 5~m for 69\% of the photos, against 45\% with map checks only and 7\% with visual odometry alone.
 
@@ -737,7 +733,6 @@ Beyond accuracy, the retrievers differ in size, which does not depend on the mac
 
 In conclusion, EfficientNet-B0 is equal to or better than the alternatives and much lighter, and it is the retriever used from here on, even though the autoencoder was trained on this exact map and the CNNs were not.
 
-
 \chapter{Sensor fusion with the EKF}
 \label{chap:ekf}
 \section{Limits of the rule-based pipeline}
@@ -875,6 +870,15 @@ As evident from Table~\ref{tab:ekf-sim}, when the camera works the whole time (l
 
 The rules give almost the same number on four of the five straight legs, about 246~m, because they simply hold the last position while the drone flies 12 steps of 20.5~m away from it. That makes them a weak baseline for this scenario: any method that keeps moving in roughly the right direction will beat it. The plain EKF ranges from 19~m to 204~m on the straight leg, depending on how good its velocity estimate was at the moment the camera went dark. With the IMU the worst flight of the ten reaches 12.6~m and the others stay below 8~m.
 
+Figure~\ref{fig:ekf-turn} shows the blackout-while-turning flight (seed 26), with the trajectory of each mode on the map and the error and search radius over time on a logarithmic axis. During the blind frames (grey band) the plain EKF's error (blue) climbs to about 300~m as it extrapolates in a straight line, the rules alone (orange) reach about 90~m and the EKF with the IMU (green) stays below about 13~m on this seed. All three recover at the first image after the blackout.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{images/ekf-blackout-turning-seed26.jpg}
+  \caption{Blackout while turning with the three modes}
+  \label{fig:ekf-turn}
+\end{figure}
+
 The NEES values in the simulation (0.3--0.6, against an ideal of 2) show that the filter is too cautious there. It believes the error could be larger than it really is, because the simulated measurements are more accurate than the noise values assume. The one rejected fix in each scenario of the EKF without IMU (seed 101) led to an escalation and a successful relocalization.
 
 On the real photos, flown as one flight without IMU, the results are those in Table~\ref{tab:ekf-real}. This run is separate from the one in Chapter~\ref{chap:relocalization}, so the rules end 2.3~m from GPS here, against 2.0~m in Table~\ref{tab:reloc-all-real}.
@@ -903,21 +907,6 @@ On the real photos, flown as one flight without IMU, the results are those in Ta
   \end{tabular}
 \end{table}
 
-The EKF ends closer to GPS (1.4~m against 2.3~m) and, most importantly, it knows how lost it is. The true position was inside its search radius on every photo, against 52\% for the rules, and its NEES of 1.33, with 98\% of photos within the 95\% bound, is consistent with the noise values chosen for the real photos. Its ATE is higher, 16.3~m against 10.5~m, and the per-photo log shows why. Photo 49 was taken 34~s and 106~m after the previous one. Constant-velocity prediction over 34~s placed the estimate 89~m off and grew the search radius to about 400~m. In that large area the retrieval did not find a verified place, so the drone was lost on that photo and recovered on the next one, 0.96~m from the GPS. The rules, by luck of their fixed increments, searched a smaller area and found it there. Without that single photo the two modes are equivalent: an ATE of 11.3~m against 10.6~m, with the same median error of 1.8~m.
-
-The important takeaway here is that the EKF is useful both with and without the IMU data. With inertial data, the filter keeps the drone localized through camera blackouts (in simulation). Without it, the filter's main gain is a reliable estimate of its own uncertainty, which makes the decisions between map check and relocalization trustworthy. Without inertial data the filter does not improve the accuracy, and while the drone turns blind it is worse than the rules. The blackout results should also be read with one limit taken into account: the noise values of the filter were set on the same five simulated flights on which these results are reported.
-
-Figure~\ref{fig:ekf-turn} shows the blackout-while-turning flight (seed 26), with the trajectory of each mode on the map and the error and search radius over time on a logarithmic axis. Figure~\ref{fig:ekf-real} shows the real photo flight with the same two panels.
-
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=\textwidth]{images/ekf-blackout-turning-seed26.jpg}
-  \caption{Blackout while turning with the three modes}
-  \label{fig:ekf-turn}
-\end{figure}
-
-In Figure~\ref{fig:ekf-turn}, during the blind frames (grey band) the plain EKF's error (blue) climbs to about 300~m as it extrapolates in a straight line, the rules alone (orange) reach about 90~m and the EKF with the IMU (green) stays below about 13~m on this seed. All three recover at the first image after the blackout.
-
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\textwidth]{images/ekf-real-flight.jpg}
@@ -925,8 +914,12 @@ In Figure~\ref{fig:ekf-turn}, during the blind frames (grey band) the plain EKF'
   \label{fig:ekf-real}
 \end{figure}
 
-In Figure~\ref{fig:ekf-real}, the EKF's search radius (dotted) stays above its error on every photo, while the radius of the rules repeatedly falls below their error. The single blue spike is the long gap at photo 49 discussed above.
+The EKF ends closer to GPS (1.4~m against 2.3~m) and, most importantly, it knows how lost it is. The true position was inside its search radius on every photo, against 52\% for the rules, and its NEES of 1.33, with 98\% of photos within the 95\% bound, is consistent with the noise values chosen for the real photos. Its ATE is higher, 16.3~m against 10.5~m, and the per-photo log shows why. Photo 49 was taken 34~s and 106~m after the previous one. Constant-velocity prediction over 34~s placed the estimate 89~m off and grew the search radius to about 400~m. In that large area the retrieval did not find a verified place, so the drone was lost on that photo and recovered on the next one, 0.96~m from the GPS. The rules, by luck of their fixed increments, searched a smaller area and found it there. Without that single photo the two modes are equivalent: an ATE of 11.3~m against 10.6~m, with the same median error of 1.8~m.
 
+Figure~\ref{fig:ekf-real} shows the real photo flight with the same two panels as Figure~\ref{fig:ekf-turn}. The EKF's search radius (dotted) stays above its error on every photo, while the radius of the rules repeatedly falls below their error. The single blue spike is the long gap at photo 49 discussed above.
+
+
+The important takeaway here is that the EKF is useful both with and without the IMU data. With inertial data, the filter keeps the drone localized through camera blackouts (in simulation). Without it, the filter's main gain is a reliable estimate of its own uncertainty, which makes the decisions between map check and relocalization trustworthy. Without inertial data the filter does not improve the accuracy, and while the drone turns blind it is worse than the rules. The blackout results should also be read with one limit taken into account: the noise values of the filter were set on the same five simulated flights on which these results are reported.
 
 \chapter{Evaluation on real flights}
 \label{chap:evaluation}
