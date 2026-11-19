@@ -140,6 +140,21 @@ LoFTR~\citep{sun2021loftr} is a detector-free local feature matcher. It first es
 EfficientLoFTR~\citep{wang2024efficientloftr}, as the name suggests, is a more efficient semi-dense alternative to its predecessor, based on an aggregated attention mechanism with adaptive token selection. A novel two-stage correlation layer is used to achieve accurate subpixel correspondences, resulting in higher accuracy. The model is about 2.5 times faster than the original LoFTR, and its efficiency can even surpass that of the SuperPoint + LightGlue pipeline. On paper, this made it a solid choice for our geo-localization pipeline. The tests, however, showed it to be unsuitable for this task, because rotation and changes in color and lighting each broke its matching (Chapter~\ref{chap:vo}).
 
 \section{CNNs and image retrieval}
+\label{sec:bg-retrieval}
+A drone that has lost its position cannot match its image against the whole map, because the map is far too large for that. For that reason, the pipeline this thesis introduces first narrows the search down with image retrieval. A neural network turns every patch of the map into a short vector of numbers, a so-called fingerprint, and the camera image is turned into a fingerprint the same way. The patches whose fingerprints are most similar to that of the camera image become the candidates, and only those are checked with the feature matcher. In this section we cover the convolutional neural networks and the methods that went into this retrieval step, which forms the second stage of our pipeline (Chapter~\ref{chap:relocalization}).
+
+This two-step approach is known as hierarchical localization \citep{sarlin2019hloc}. A global descriptor of the whole image first retrieves candidate locations from a database, and local features matched against those candidates then give the precise position. The advantage of this approach is that the feature matching, which is expensive in terms of computing time, runs only on a handful of candidates instead of the whole database, which makes it suitable for real-time use. The pipeline in this thesis follows the same scheme: a CNN fingerprint retrieves the candidates and SuperPoint + LightGlue verifies them.
+
+Image retrieval for localization is studied in the field of visual place recognition, where the task is to recognize the location of a given photograph. NetVLAD is a CNN architecture for this task, trained end-to-end on Google Street View images taken at the same places at different times \citep{arandjelovic2016netvlad}. Its main component is the NetVLAD layer, which pools the features of the network into a single descriptor of the image and has to be trained for that purpose. It outperformed both non-learned image representations and standard CNN descriptors. NetVLAD also evaluates retrieval as the percentage of queries for which a correct location is among the top $N$ retrieved images, the equivalent of the Recall@$K$ used in this thesis. Since this project uses pretrained networks without fine-tuning, a layer that requires training could not be used, and the simpler global average pooling was used instead.
+
+ResNet is a family of convolutional networks built on residual learning \citep{he2016resnet}. Instead of learning a mapping directly, each block of layers learns the difference, or residual, between its input and its output. This makes very deep networks much easier to train, so they can gain accuracy from depth rather than becoming harder to optimize. With this approach, ResNet won the ImageNet classification challenge of 2015 with networks of up to 152 layers. Its 50-layer version, ResNet50, has become the standard backbone of image retrieval, and with about 23.5 million parameters in its feature layers it was chosen as one of the two CNNs tested in this thesis.
+
+The weights of a network depend on the data it was trained on, so the choice of pretraining matters as much as the architecture. Places is a database of 10 million photographs labeled with the type of scene they show \citep{zhou2018places}. Its Places365 version has 365 scene categories, and networks trained on it learn to describe whole scenes rather than single objects. Aerial images of fields, roads and buildings are much closer to scenes than to objects. Hence the ResNet50 used in this project carries the official Places365 weights.
+
+EfficientNet, as the name suggests, focuses on the efficiency of convolutional networks \citep{tan2019efficientnet}. Its authors show that the depth, width and input resolution of a network should be scaled together, in a fixed balance, rather than one at a time. Its baseline network, EfficientNet-B0, was found through neural architecture search, and the larger versions B1 to B7 are scaled up from it. At the time of its release, the largest version reached state-of-the-art accuracy on ImageNet while being 8.4 times smaller and 6.1 times faster than the best existing network. EfficientNet-B0 has only about 4 million parameters in its feature layers. This is essential for the on-board computer of a drone, and for that reason it was chosen as the lightweight network of the two CNNs. Its weights come from ImageNet, a database of over a million photographs in 1000 object categories and the standard benchmark for image classification \citep{russakovsky2015imagenet}, since that is the only official pretraining available for it. Overall, it turned out to be the best of the three retrievers in this project, as the tests in Chapter~\ref{chap:relocalization} showed.
+
+Both networks were originally built for classification, so their last layers, which output a class, were removed. What remains is a stack of feature maps, and these are turned into a single fingerprint with global average pooling, which averages each feature map into one number \citep{lin2014nin}. The result is a vector of 2048 numbers for ResNet50 and 1280 for EfficientNet-B0. Each vector is then normalized to a length of one, so that the similarity of two fingerprints can be measured simply by their dot product.
+
 \section{Visual odometry and dead reckoning}
 \section{IMU and sensor fusion}
 \section{Related work}
@@ -959,6 +974,11 @@ The important takeaway here is that the EKF is useful both with and without the 
 \phantomsection
 \begin{thebibliography}{99}
 
+\bibitem[Arandjelovi{\'c} et~al.(2016)]{arandjelovic2016netvlad}
+Arandjelovi{\'c}, R., Gronat, P., Torii, A., Pajdla, T., \& Sivic, J. (2016).
+NetVLAD: CNN architecture for weakly supervised place recognition.
+In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition} (pp.~5297--5307). \url{https://doi.org/10.1109/CVPR.2016.572}
+
 \bibitem[Bar-Shalom et~al.(2001)]{barshalom2001}
 Bar-Shalom, Y., Li, X.~R., \& Kirubarajan, T. (2001).
 \textit{Estimation with applications to tracking and navigation: Theory, algorithms and software}.
@@ -1009,7 +1029,12 @@ Kalman, R.~E. (1960).
 A new approach to linear filtering and prediction problems.
 \textit{Journal of Basic Engineering}, \textit{82}(1), 35--45. \url{https://doi.org/10.1115/1.3662552}
 
-\bibitem[Lin et~al.(2014)]{lin2014coco}
+\bibitem[M.~Lin et~al.(2014)]{lin2014nin}
+Lin, M., Chen, Q., \& Yan, S. (2014).
+Network in network.
+In \textit{International Conference on Learning Representations}. \url{https://arxiv.org/abs/1312.4400}
+
+\bibitem[T.-Y.~Lin et~al.(2014)]{lin2014coco}
 Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Doll{\'a}r, P., \& Zitnick, C.~L. (2014).
 Microsoft COCO: Common objects in context.
 In \textit{Computer Vision -- ECCV 2014} (pp.~740--755). Springer. \url{https://doi.org/10.1007/978-3-319-10602-1_48}
@@ -1028,6 +1053,16 @@ Distinctive image features from scale-invariant keypoints.
 Rublee, E., Rabaud, V., Konolige, K., \& Bradski, G. (2011).
 ORB: An efficient alternative to SIFT or SURF.
 In \textit{Proceedings of the IEEE International Conference on Computer Vision} (pp.~2564--2571). \url{https://doi.org/10.1109/ICCV.2011.6126544}
+
+\bibitem[Russakovsky et~al.(2015)]{russakovsky2015imagenet}
+Russakovsky, O., Deng, J., Su, H., Krause, J., Satheesh, S., Ma, S., Huang, Z., Karpathy, A., Khosla, A., Bernstein, M., Berg, A.~C., \& Fei-Fei, L. (2015).
+ImageNet large scale visual recognition challenge.
+\textit{International Journal of Computer Vision}, \textit{115}(3), 211--252. \url{https://doi.org/10.1007/s11263-015-0816-y}
+
+\bibitem[Sarlin et~al.(2019)]{sarlin2019hloc}
+Sarlin, P.-E., Cadena, C., Siegwart, R., \& Dymczyk, M. (2019).
+From coarse to fine: Robust hierarchical localization at large scale.
+In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~12716--12725). \url{https://arxiv.org/abs/1812.03506}
 
 \bibitem[Sarlin et~al.(2020)]{sarlin2020superglue}
 Sarlin, P.-E., DeTone, D., Malisiewicz, T., \& Rabinovich, A. (2020).
