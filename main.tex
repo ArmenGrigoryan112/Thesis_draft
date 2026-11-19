@@ -45,6 +45,8 @@
 \usepackage[nottoc, notlof, notlot]{tocbibind}
 %\onehalfspacing
 %\counterwithout{footnote}{chapter}
+\usepackage[round,authoryear]{natbib}% APA-style author-year citations
+\setlength{\bibhang}{1.27cm}% APA hanging indent
 \usepackage{hyperref}
 \hypersetup{
 			hyperfootnotes=true,			
@@ -123,19 +125,19 @@ At the core of this project is the computer vision aspect of deep learning, spec
 
 \section{Feature extraction and matching}
 \label{sec:bg-features}
-SuperPoint~\cite{detone2018superpoint} is a self-supervised framework for training interest point detectors and descriptors to solve multiple-view geometry problems in computer vision. It is essentially a fully-convolutional model that processes full-sized images and computes pixel-level interest point locations and their associated descriptors in one forward pass. Its training uses Homographic Adaptation, a multi-scale, multi-homography approach for boosting interest point detection repeatability and cross-domain adaptation. Trained on the MS-COCO dataset with this approach, it detects a much richer set of interest points than its initial, pre-adapted version and than traditional corner detectors, and it achieves state-of-the-art homography estimation compared with LIFT, SIFT and ORB. For its state-of-the-art accuracy, efficiency, open-source access, and the absence of any need to retrain the model on a new dataset, it has been chosen as the core of one of the two visual odometry pipelines tested in this thesis.
+SuperPoint~\citep{detone2018superpoint} is a self-supervised framework for training interest point detectors and descriptors to solve multiple-view geometry problems in computer vision. It is essentially a fully-convolutional model that processes full-sized images and computes pixel-level interest point locations and their associated descriptors in one forward pass. Its training uses Homographic Adaptation, a multi-scale, multi-homography approach for boosting interest point detection repeatability and cross-domain adaptation. Trained on the MS-COCO dataset \citep{lin2014coco} with this approach, it detects a much richer set of interest points than its initial, pre-adapted version and than traditional corner detectors, and it achieves state-of-the-art homography estimation compared with LIFT \citep{yi2016lift}, SIFT \citep{lowe2004sift} and ORB \citep{rublee2011orb}. For its state-of-the-art accuracy, efficiency, open-source access, and the absence of any need to retrain the model on a new dataset, it has been chosen as the core of one of the two visual odometry pipelines tested in this thesis.
 
-SuperGlue~\cite{sarlin2020superglue} is a neural network whose purpose is to match two sets of local features by jointly finding correspondences and rejecting non-matchable points. The matches are found by solving a differentiable optimal transport problem, whose costs are predicted by a graph neural network. The uniqueness of the SuperGlue approach is that it introduces a flexible context aggregation mechanism, based on attention, which allows the network to reason about the underlying 3D scene and the feature assignments at the same time. Instead of relying on hand-designed heuristics, it learns priors about geometric transformations and the regularities of the 3D world from image pairs. It outperforms other learned approaches and achieves state-of-the-art results in pose estimation in both indoor and outdoor environments. In order to use the full capability of the system, SuperPoint was used as the feature detection network while SuperGlue played the role of the matcher.
+SuperGlue~\citep{sarlin2020superglue} is a neural network whose purpose is to match two sets of local features by jointly finding correspondences and rejecting non-matchable points. The matches are found by solving a differentiable optimal transport problem, whose costs are predicted by a graph neural network. The uniqueness of the SuperGlue approach is that it introduces a flexible context aggregation mechanism, based on attention, which allows the network to reason about the underlying 3D scene and the feature assignments at the same time. Instead of relying on hand-designed heuristics, it learns priors about geometric transformations and the regularities of the 3D world from image pairs. It outperforms other learned approaches and achieves state-of-the-art results in pose estimation in both indoor and outdoor environments. In order to use the full capability of the system, SuperPoint was used as the feature detection network while SuperGlue played the role of the matcher.
 
 The early experiments of the project, however, pointed to a serious setback in using the SuperPoint + SuperGlue system as it is: its computational cost is a concern for real-time performance on the limited hardware of a drone. For that reason, its better optimized and more lightweight successor, LightGlue, was selected.
 
-LightGlue~\cite{lindenberger2023lightglue} is a deep neural network that revisits and improves SuperGlue. It requires less memory and computational power, it is more accurate, and it adapts to the difficulty of the given problem. On images with greater overlap, or with other visual features that make it easier to match common pairs of keypoints, it runs much faster, while on harder images it takes more time to analyze the keypoints correctly.
+LightGlue~\citep{lindenberger2023lightglue} is a deep neural network that revisits and improves SuperGlue. It requires less memory and computational power, it is more accurate, and it adapts to the difficulty of the given problem. On images with greater overlap, or with other visual features that make it easier to match common pairs of keypoints, it runs much faster, while on harder images it takes more time to analyze the keypoints correctly.
 
 For the computer vision part of the pipeline, the logical alternative to a detector-based system, which first detects keypoints and then matches them, is a detector-free system, which matches the images directly. Hence LoFTR and its more lightweight successor EfficientLoFTR were selected for this project.
 
-LoFTR~\cite{sun2021loftr} is a detector-free local feature matcher. It first establishes pixel-wise dense matches at a coarse level and later refines the good matches at a fine level. In contrast to dense methods that use a cost volume to search for correspondences, LoFTR uses self- and cross-attention layers in a Transformer to obtain feature descriptors that are conditioned on both images. The global receptive field of the Transformer allows the network to produce dense matches even in low-texture areas, where feature detectors usually struggle. At the time of its release, LoFTR outperformed state-of-the-art methods by a large margin.
+LoFTR~\citep{sun2021loftr} is a detector-free local feature matcher. It first establishes pixel-wise dense matches at a coarse level and later refines the good matches at a fine level. In contrast to dense methods that use a cost volume to search for correspondences, LoFTR uses self- and cross-attention layers in a Transformer to obtain feature descriptors that are conditioned on both images. The global receptive field of the Transformer allows the network to produce dense matches even in low-texture areas, where feature detectors usually struggle. At the time of its release, LoFTR outperformed state-of-the-art methods by a large margin.
 
-EfficientLoFTR~\cite{wang2024efficientloftr}, as the name suggests, is a more efficient semi-dense alternative to its predecessor, based on an aggregated attention mechanism with adaptive token selection. A novel two-stage correlation layer is used to achieve accurate subpixel correspondences, resulting in higher accuracy. The model is about 2.5 times faster than the original LoFTR, and its efficiency can even surpass that of the SuperPoint + LightGlue pipeline. On paper, this made it a solid choice for our geo-localization pipeline. The tests, however, showed it to be unsuitable for this task, because rotation and changes in color and lighting each broke its matching (Chapter~\ref{chap:vo}).
+EfficientLoFTR~\citep{wang2024efficientloftr}, as the name suggests, is a more efficient semi-dense alternative to its predecessor, based on an aggregated attention mechanism with adaptive token selection. A novel two-stage correlation layer is used to achieve accurate subpixel correspondences, resulting in higher accuracy. The model is about 2.5 times faster than the original LoFTR, and its efficiency can even surpass that of the SuperPoint + LightGlue pipeline. On paper, this made it a solid choice for our geo-localization pipeline. The tests, however, showed it to be unsuitable for this task, because rotation and changes in color and lighting each broke its matching (Chapter~\ref{chap:vo}).
 
 \section{CNNs and image retrieval}
 \section{Visual odometry and dead reckoning}
@@ -147,7 +149,7 @@ EfficientLoFTR~\cite{wang2024efficientloftr}, as the name suggests, is a more ef
 \label{chap:data}
 \section{Dataset}
 \label{sec:dataset}
-The initial dataset consisted of six geo-referenced orthophotos and 58 images taken from an actual flight sequence provided by the University of Udine, using a DJI Phantom~4 drone (camera FC330). The visual odometry benchmarks were tested on all six orthophotos. The later stages, specifically the autoencoder and convolutional neural network (CNN) retrievers and the extended Kalman filter (EKF), used only one of them, tile 06611109, which covers the area of the real flight photos. Each orthophoto has dimensions of $9000 \times 8400$ pixels, which at 0.1~m/px covers an area of $900 \times 840$~m, in the coordinate system EPSG:25833 (ETRS89 / UTM zone 33N).
+The initial dataset consisted of six geo-referenced orthophotos and 58 images taken from an actual flight sequence provided by the University of Udine, using a DJI Phantom~4 drone (camera FC330) \citep{dji2016phantom4}. The visual odometry benchmarks were tested on all six orthophotos. The later stages, specifically the autoencoder and convolutional neural network (CNN) retrievers and the extended Kalman filter (EKF) \citep{kalman1960}, used only one of them, tile 06611109, which covers the area of the real flight photos. Each orthophoto has dimensions of $9000 \times 8400$ pixels, which at 0.1~m/px covers an area of $900 \times 840$~m, in the coordinate system EPSG:25833 (ETRS89 / UTM zone 33N).
 
 In their autoencoder, Fabris et al.\ applied a saliency mask on the tiles in order to train the network more efficiently. However, our pipeline does not use the salient/non-salient selection: every patch of the grid enters the database, and the 747 salient patches are only used to reproduce Fabris's method as a baseline. As the on-board map we used the color-corrected version of the original orthophoto, on which Fabris's network was trained. The original orthophoto instead plays the role of the real world: the simulated camera image is cut from it. The on-board map has no usable geo-reference of its own, so the code assumes it sits on the same pixel grid as the original tile. That assumption was measured and holds, with an offset of about 0.02~px. The consequence is that the simulated camera and the map differ in color but are geometrically identical, pixel for pixel. This makes simulated matching easier than in reality, where a map and a later flight never line up exactly. It is also why simulated fixes can be accurate to a few millimeters when no photometric change is applied. Simulated accuracy should be read as a best case.
 
@@ -176,7 +178,7 @@ The flight simulations have two parts: a path and a render of the camera's view 
 
 Each flight starts at a random position at least 82~m from the edge of the tile, so that every camera crop stays inside the image. The drone starts facing north at its nominal altitude, which is the only pose it is told. In the code this is the attitude matrix $G$ equal to the identity, $G = I$. A straight step moves 20.5~m, so two consecutive images share 80\% of their area. A diagonal step moves 20.5~m along both axes at once, which is 29~m, and the two images then share only 64\% of their area ($0.8 \times 0.8$). A 25-step flight is 512~m with 4-connectivity and about 600~m with 8-connectivity. The smaller overlap is the main reason diagonal paths produce more failed steps.
 
-The camera's current view is generated on the fly. A 1640~px crop of the world orthophoto is cut around the drone's position, rotated by the drone's heading and rescaled by its scale factor. The central $1024 \times 1024$~px images are then kept (102.4~m ground area). This is the final crop dimension used for the pipeline. This size is large enough to contain hundreds of SuperPoint keypoints even over fields, and it matches the size of a real flight photo after resizing (about 1230~px wide). Generating the initial crop with larger dimensions guarantees that the $1024 \times 1024$~px patch does not have fillers caused by the rotations (blank pixels). A 1024~px square rotated by any angle needs a square of $1024 \times \sqrt{2} \approx 1448$~px to stay filled, and at the smallest scale of 0.9 it needs $1448 / 0.9 \approx 1609$~px. The 1640~px crop is the next convenient size above that (8 steps of 205~px).
+The camera's current view is generated on the fly. A 1640~px crop of the world orthophoto is cut around the drone's position, rotated by the drone's heading and rescaled by its scale factor. The central $1024 \times 1024$~px images are then kept (102.4~m ground area). This is the final crop dimension used for the pipeline. This size is large enough to contain hundreds of SuperPoint \citep{detone2018superpoint} keypoints even over fields, and it matches the size of a real flight photo after resizing (about 1230~px wide). Generating the initial crop with larger dimensions guarantees that the $1024 \times 1024$~px patch does not have fillers caused by the rotations (blank pixels). A 1024~px square rotated by any angle needs a square of $1024 \times \sqrt{2} \approx 1448$~px to stay filled, and at the smallest scale of 0.9 it needs $1448 / 0.9 \approx 1609$~px. The 1640~px crop is the next convenient size above that (8 steps of 205~px).
 
 \subsection{Patch grids and image sizes}
 \label{sec:patch-grids}
@@ -211,7 +213,7 @@ The augmentations are applied dynamically, on the 1640~px crops as they are bein
 \item \textbf{None}: applies no change and serves as a control.
 \item \textbf{Rotation}: the heading is changed by $[-15^\circ, +15^\circ]$ per image and the changes accumulate over time.
 \item \textbf{Scale}: the scale changes by $[-10\%, +10\%]$ per image, as the altitude varies.
-\item \textbf{Photometric}: the Albumentations library applies color jitter (contrast and brightness changes by $[-30\%, +30\%]$, saturation by $[-20\%, +20\%]$, hue shifts by $[-5\%, +5\%]$), Gaussian noise (standard deviation of $[5\%, 15\%]$ of the intensity range, the same on all three channels) and motion blur (kernel range $[5, 15]$~px).
+\item \textbf{Photometric}: the Albumentations library \citep{buslaev2020albumentations} applies color jitter (contrast and brightness changes by $[-30\%, +30\%]$, saturation by $[-20\%, +20\%]$, hue shifts by $[-5\%, +5\%]$), Gaussian noise (standard deviation of $[5\%, 15\%]$ of the intensity range, the same on all three channels) and motion blur (kernel range $[5, 15]$~px).
 \item \textbf{Realistic}: this setting combines all the above mentioned augmentations in order to achieve the most realistic flying conditions.
 \end{enumerate}
 
@@ -229,7 +231,7 @@ Three scenarios test the pipeline:
 
 In the performance comparisons the blackout is placed on a straight leg, while in the EKF testing the blackout is placed both on a straight leg and on a leg with blind turns. In the blackout on a straight leg, the path repeats its last step for the 12 blind frames, so the drone flies about 250~m in one direction. In the unknown start, the direction of the wrong start is drawn uniformly, and its distance uniformly between 200 and 400~m, and the drone's uncertainty is set to infinity, so its first fix has to be a search of the whole map. Fabris's own method, in contrast, is always started from the correct patch when the start is known.
 
-In the EKF testing, the drone flies a smooth curve (cubic spline) through the waypoints at 5~m/s, close to the speed of the real flight (about 50~m between photos, about 12~s apart). That gives one image every 4.1~s, with the inertial measurement unit (IMU) sampled at 100~Hz along the same curve. The curve's peak acceleration is checked against what a Phantom~4 can physically do without GPS: in ATTI mode (attitude mode, without GPS position hold) its maximum tilt of $35^\circ$ allows about 6.9~m/s$^2$. The peak acceleration over all simulated paths is 5.01~m/s$^2$, which is inside that limit.
+In the EKF testing, the drone flies a smooth curve (cubic spline) through the waypoints at 5~m/s, close to the speed of the real flight (about 50~m between photos, about 12~s apart). That gives one image every 4.1~s, with the inertial measurement unit (IMU) sampled at 100~Hz along the same curve. The curve's peak acceleration is checked against what a Phantom~4 can physically do without GPS: in ATTI mode (attitude mode, without GPS position hold) its maximum tilt of $35^\circ$ \citep{dji2016phantom4} allows about 6.9~m/s$^2$. The peak acceleration over all simulated paths is 5.01~m/s$^2$, which is inside that limit.
 
 \section{Evaluation metrics}
 \label{sec:metrics}
@@ -257,7 +259,7 @@ Recall alone says nothing about whether the pipeline can use a candidate, so two
 \label{sec:metrics-filter}
 These metrics measure the extent to which the drone is aware of how lost it is. The truth-in-radius share is the fraction of images on which the true position lies inside the search radius, so if the metric scores low, the drone is searching in the wrong area. It is reported for both the rule-based pipeline and the EKF.
 
-The remaining two apply to the EKF only. NEES (normalized estimation error squared) is $e^{\top} P^{-1} e$, where $e$ is the true position error and $P$ the filter's position covariance. For a two-dimensional position its average should be about 2: above 2 the filter is overconfident, below 2 it is too cautious. The share of images with NEES under 5.99 (the 95\% bound) should be about 95\%. The number of fixes rejected by the $\chi^2$ gate shows how often the filter refused a measurement. For image $k$, with the position error $e_k$ and the $2 \times 2$ position block $P_k$ of the filter's covariance,
+The remaining two apply to the EKF only. NEES (normalized estimation error squared) \citep{barshalom2001} is $e^{\top} P^{-1} e$, where $e$ is the true position error and $P$ the filter's position covariance. For a two-dimensional position its average should be about 2: above 2 the filter is overconfident, below 2 it is too cautious. The share of images with NEES under 5.99 (the 95\% bound) should be about 95\%. The number of fixes rejected by the $\chi^2$ gate shows how often the filter refused a measurement. For image $k$, with the position error $e_k$ and the $2 \times 2$ position block $P_k$ of the filter's covariance,
 \begin{equation}
   \mathrm{NEES}_k = e_k^{\top} P_k^{-1} e_k, \qquad e_k = \hat{p}_k - p_k
   \label{eq:nees}
@@ -271,7 +273,7 @@ Visual odometry is the drone's sense of its own motion. Similar to dead reckonin
 \label{sec:vo-method}
 Since the camera looks straight down at the ground that is roughly flat, between two images the view can only slide, rotate and change scale (when the altitude changes). Tilt and perspective effects are negligible. Every correct pair of matched points must therefore obey a single rule with four unknowns, a 4-degree-of-freedom similarity transform, otherwise known as 4-DOF.
 
-As described in Section~\ref{sec:simulation}, the overlap between two consecutive images was set to 80\%, meaning visual matchers had reliable room to detect the movement between two frames. Each step works as follows. SuperPoint, a CNN, finds up to 2048 keypoints in each image at distinctive features of the frame and describes each one of those keypoints with a vector. LightGlue, an attention-based matcher, pairs the keypoints generated by SuperPoint in the given pair of images. RANSAC (random sample consensus) then finds the similarity hidden among the matches: for up to 50{,}000 iterations it takes two random pairs, computes the rule they imply and counts how many other pairs agree within 5~px. OpenCV stops earlier once it is confident that a better rule is unlikely to be found. The rule with the highest number of agreeing pairs (inliers) wins. The step is accepted only if at least 15 pairs agree and the scale change lies between 0.5 and 2, since a drone cannot halve or double its altitude between two images. Both SuperPoint and LightGlue are used with their pretrained weights and the similarity is fitted with OpenCV's \texttt{estimateAffinePartial2D}, which estimates exactly these four parameters. Two pairs are enough to define a similarity, so a model supported by only a handful of pairs can arise by chance. Requiring at least 15 agreeing pairs rules that out.
+As described in Section~\ref{sec:simulation}, the overlap between two consecutive images was set to 80\%, meaning visual matchers had reliable room to detect the movement between two frames. Each step works as follows. SuperPoint \citep{detone2018superpoint}, a CNN, finds up to 2048 keypoints in each image at distinctive features of the frame and describes each one of those keypoints with a vector. LightGlue \citep{lindenberger2023lightglue}, an attention-based matcher, pairs the keypoints generated by SuperPoint in the given pair of images. RANSAC (random sample consensus) \citep{fischler1981ransac} then finds the similarity hidden among the matches: for up to 50{,}000 iterations it takes two random pairs, computes the rule they imply and counts how many other pairs agree within 5~px. OpenCV \citep{bradski2000opencv} stops earlier once it is confident that a better rule is unlikely to be found. The rule with the highest number of agreeing pairs (inliers) wins. The step is accepted only if at least 15 pairs agree and the scale change lies between 0.5 and 2, since a drone cannot halve or double its altitude between two images. Both SuperPoint and LightGlue are used with their pretrained weights and the similarity is fitted with OpenCV's \texttt{estimateAffinePartial2D}, which estimates exactly these four parameters. Two pairs are enough to define a similarity, so a model supported by only a handful of pairs can arise by chance. Requiring at least 15 agreeing pairs rules that out.
 
 Since the camera looks straight down, the center of each image is the point directly beneath the drone, so the drone's movement is where the center of the new image lies in the keyframe, relative to the keyframe's center: $d = A^{-1}(c - t) - c$, with $c$ the image center. The drone therefore keeps a running attitude $G$ (scale and rotation from map to image) and converts the movement into map directions before adding it, $P \leftarrow P + G^{-1} d$. It then updates the attitude with the rotation and scale just measured, $G \leftarrow A\,G$. The new image becomes the keyframe.
 
@@ -285,7 +287,7 @@ The step can be described using the following formulas:
 \end{align}
 The first is the fitted model, the second is the movement of the drone in keyframe pixels and the third is the update of position and attitude.
 
-To verify the implementation of these formulas, we performed checks on three cases with known answers, on images without photometric change. The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1. Table~\ref{tab:vo-known-answer} lists the expected values next to what each matcher measured, with shifts in pixels and the inlier ratio as the share of matches that agree with the fitted motion. In this and the following tables, SP+LG stands for SuperPoint + LightGlue and ELoFTR for EfficientLoFTR.
+To verify the implementation of these formulas, we performed checks on three cases with known answers, on images without photometric change. The expected answers are a shift of 205~px east, a rotation of $-10^\circ$ and a scale of 1.1. Table~\ref{tab:vo-known-answer} lists the expected values next to what each matcher measured, with shifts in pixels and the inlier ratio as the share of matches that agree with the fitted motion. In this and the following tables, SP+LG stands for SuperPoint + LightGlue and ELoFTR for EfficientLoFTR \citep{wang2024efficientloftr}.
 
 \begin{table}[!htbp]
   \centering
@@ -318,7 +320,7 @@ LightGlue recovers all three with an accuracy of at most a few hundredths of a p
 \label{sec:vo-matchers}
 The matcher was chosen by the benchmarks. Each one of the six tiles was flown with 10 seeds, two matchers and two path types (4- and 8-connectivity, described in Section~\ref{sec:simulation}), giving 240 flights of 25 steps (512~m with 4-connectivity, about 600~m with 8-connectivity) in the realistic condition. SuperPoint + LightGlue was accurate at every level: each step was off by about 27~cm and $0.04^\circ$. At the flown distance, the median final drift was 0.64~m with 4-connectivity, about 1~m per 800~m flown, and 0.89~m with 8-connectivity. EfficientLoFTR on the other hand, as a detector-free transformer-based matcher, produced about four times more matches, but only about 2\% of them agreed with a single motion, whereas with LightGlue this metric was at 74\%. EfficientLoFTR's rotation error was about $6.5^\circ$ per step, which accumulated in the stored heading, so every later movement was added in the wrong direction, resulting in the drone getting lost. Many matches are worthless if they do not agree with one motion and a rotation error is far more significant than a shift error, because it bends the whole remaining path.
 
-Both matchers were given the same images and the same estimator, so only the matching differed. EfficientLoFTR was the pretrained version from the HuggingFace framework, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results over all six tiles, 60 flights per matcher and connectivity, are shown in Table~\ref{tab:vo-pooled}.
+Both matchers were given the same images and the same estimator, so only the matching differed. EfficientLoFTR was the pretrained version from the HuggingFace Transformers library \citep{wolf2020transformers}, run at native 1024~px resolution without resizing, since the internal stride of the model accepts image dimensions of size divisible by 32. Matches were kept with a confidence of at least 0.2, the default. Higher thresholds, from 0.4 to 0.9, were also tried on a test flight and did not rescue the matcher: the final drift stayed between 5 and 35~m. The pooled results over all six tiles, 60 flights per matcher and connectivity, are shown in Table~\ref{tab:vo-pooled}.
 
 \begin{table}[!htbp]
   \centering
@@ -476,7 +478,7 @@ Clearly, on a normal flight it removes the drift almost entirely: the drone ends
 \label{sec:reloc-why}
 Even though the upgrade of the initial pure visual odometry with map checks increases the likelihood of the drone geo-localizing itself accurately, there are still situations where the odometry can fail: a camera blackout (fog, glare, a covered lens, a jammed video link), a break in the odometry across a long gap between images, or a wrong start. When that happens, a big gap is left in the estimate of the position, leading to a potentially unrecoverable drift in the drone's position estimates. To address these issues, the system needs a complete relocalization through the means of analyzing the whole map, or at least a large area. The problem not only requires an accurate estimate, but also a solution that would be reasonable to execute on a drone that needs relocalization in real time.
 
-Checking every place on the map with LightGlue would take minutes. Each patch of the map is summarized before the flight by a fingerprint vector and during the flight, the current image's fingerprint is compared with all of them within milliseconds, so that only a few most similar places need checking with LightGlue.
+Checking every place on the map with LightGlue \citep{lindenberger2023lightglue} would take minutes. Each patch of the map is summarized before the flight by a fingerprint vector and during the flight, the current image's fingerprint is compared with all of them within milliseconds, so that only a few most similar places need checking with LightGlue.
 
 To decide when to run the relocalization sequence, the drone keeps an uncertainty value $r$, which denotes how far off it believes it could be. It starts at 1~m with a known start and at infinity when it does not know where it started. It grows by 1~m for every successful odometry step and by 25~m (about 1.2 times the 20.5~m step, an upper bound on how far the drone can move in one frame) for every image without measurement, either a blackout or a failed odometry step, and it returns to 1~m after any accepted fix. On every 5th image or when odometry fails the value of $r$ is checked: if it is at most 30~m a map check is performed, and if it is larger a relocalization is performed. If a map check fails while odometry worked, the drone waits for the next scheduled fix. If odometry also failed, or it is the second failed map check in a row, the estimate is no longer trusted: $r$ is raised to at least 60~m and a relocalization sequence is run on the same image.
 
@@ -512,15 +514,15 @@ The autoencoder works. However, its narrow tolerance to offset and the fact that
 
 \section{Pretrained CNN retrievers}
 \label{sec:reloc-cnn}
-The search for a new retrieval network had to fill the following gaps: a network that would not need retraining on every new map, a network that would be at least as accurate as the autoencoder and potentially better, a network that would require less computational power without losing accuracy. For those reasons, two convolutional neural networks were chosen: ResNet50 and EfficientNet-B0.
+The search for a new retrieval network had to fill the following gaps: a network that would not need retraining on every new map, a network that would be at least as accurate as the autoencoder and potentially better, a network that would require less computational power without losing accuracy. For those reasons, two convolutional neural networks were chosen: ResNet50 \citep{he2016resnet} and EfficientNet-B0 \citep{tan2019efficientnet}.
 
-ResNet50 is the standard backbone of image retrieval and the baseline of the University-1652 drone-to-satellite benchmark. It has about 23.5 million parameters and it has been pretrained on Places365, a dataset of scenes rather than objects, which is closer to aerial views of fields, roads and buildings than ImageNet. The official MIT CSAIL checkpoint is used.
+ResNet50 is the standard backbone of image retrieval and the baseline of the University-1652 drone-to-satellite benchmark \citep{zheng2020university}. It has about 23.5 million parameters and it has been pretrained on Places365 \citep{zhou2018places}, a dataset of scenes rather than objects, which is closer to aerial views of fields, roads and buildings than ImageNet \citep{deng2009imagenet}. The official MIT CSAIL checkpoint is used.
 
 EfficientNet-B0 represents the potentially lightweight solution to the given problem. It has about 4 million parameters in its feature layers and its weights come from ImageNet.
 
 Both networks are used the same way, which is the standard recipe for turning a classification network into a retrieval network. The classification head is removed and the network is run up to its last convolutional layer. The resulting feature map is averaged over all positions (global average pooling) into one vector of 2048 numbers for ResNet50 and 1280 for EfficientNet-B0. The vector is then L2-normalized, so that the dot product of two fingerprints equals their cosine similarity. Global average pooling has a property that explains much of the result: it summarizes what is in the patch more than where it is, so a patch shifted by a few meters keeps nearly the same fingerprint. The 512~px patch is resized to 224~px and normalized with the ImageNet mean and standard deviation, because a network pretrained at 224~px performs best at the size and statistics it was trained on. At 224~px one pixel covers about 0.23~m, which is still finer than most of the structures that identify a place.
 
-In terms of implementation, both networks come from the torchvision library. ResNet50 is cut after its last convolutional block, dropping its own pooling and classification layers. For a 224~px input that block outputs a $7 \times 7$ map with 2048 channels. EfficientNet-B0 is used through its features part, which outputs a $7 \times 7$ map with 1280 channels. Averaging the 49 positions gives the fingerprint. The patch is shrunk from 512 to 224~px with area interpolation, which averages the pixels it merges and so avoids aliasing. All ResNet50 results reported here use the Places365 weights. Everything else is kept identical to the autoencoder retriever: the same 512~px patches, both grids, the same de-rotation of the query with the compass, the same top-5 with 25.6~m spacing, the same LightGlue verification with the 50-match rule, and the same flights and photos. Only the fingerprint function changes, so any difference in the results is caused by the retriever alone.
+In terms of implementation, both networks come from the torchvision library \citep{torchvision2016}. ResNet50 is cut after its last convolutional block, dropping its own pooling and classification layers. For a 224~px input that block outputs a $7 \times 7$ map with 2048 channels. EfficientNet-B0 is used through its features part, which outputs a $7 \times 7$ map with 1280 channels. Averaging the 49 positions gives the fingerprint. The patch is shrunk from 512 to 224~px with area interpolation, which averages the pixels it merges and so avoids aliasing. All ResNet50 results reported here use the Places365 weights. Everything else is kept identical to the autoencoder retriever: the same 512~px patches, both grids, the same de-rotation of the query with the compass, the same top-5 with 25.6~m spacing, the same LightGlue verification with the 50-match rule, and the same flights and photos. Only the fingerprint function changes, so any difference in the results is caused by the retriever alone.
 
 \section{Comparison}
 \label{sec:reloc-comparison}
@@ -752,7 +754,7 @@ In conclusion, EfficientNet-B0 is equal to or better than the alternatives and m
 \label{chap:ekf}
 \section{Limits of the rule-based pipeline}
 \label{sec:ekf-limits}
-Up until this point the measurements in the pipeline were combined by fixed rules, which have three weaknesses. First, the uncertainty $r$ is a guess: it grows by a fixed 1~m or 25~m regardless of what actually happened during the flight, yet it decides whether a map check or a relocalization is run and how large an area is searched. On the real photo flight the rules believed they were within 6--10~m while being 21--33~m off, and the true position lay inside $r$ on only 52\% of the photos. Second, every measurement is trusted equally: an accepted fix simply replaces the position, whether it came from 51 agreeing matches or from 400, so a shaky odometry step counts as much as a solid one. Third, the rules have no way to use the other sensors of the drone. A real drone carries an IMU that measures its motion 100 times per second, and that information is lost. The extended Kalman filter (EKF) addresses all three. It replaces only the bookkeeping side of the pipeline, and everything else stays the same as described in Chapter~\ref{chap:relocalization}.
+Up until this point the measurements in the pipeline were combined by fixed rules, which have three weaknesses. First, the uncertainty $r$ is a guess: it grows by a fixed 1~m or 25~m regardless of what actually happened during the flight, yet it decides whether a map check or a relocalization is run and how large an area is searched. On the real photo flight the rules believed they were within 6--10~m while being 21--33~m off, and the true position lay inside $r$ on only 52\% of the photos. Second, every measurement is trusted equally: an accepted fix simply replaces the position, whether it came from 51 agreeing matches or from 400, so a shaky odometry step counts as much as a solid one. Third, the rules have no way to use the other sensors of the drone. A real drone carries an IMU that measures its motion 100 times per second, and that information is lost. The extended Kalman filter (EKF) \citep{kalman1960,barshalom2001} addresses all three. It replaces only the bookkeeping side of the pipeline, and everything else stays the same as described in Chapter~\ref{chap:relocalization}.
 
 \section{Filter design}
 \label{sec:ekf-design}
@@ -809,7 +811,7 @@ The noise $\sigma$ says how much each measurement is trusted. For an odometry st
 \end{equation}
 with $\sigma_0 = 0.2$~m and $\kappa = 0.01$ in simulation, and $\sigma_0 = 0.3$~m and $\kappa = 0.05$ on the real photos, whose long gaps make odometry less accurate. The last factor inflates the noise when fewer than 100 matches agree, so a weak step counts less. A map check has a noise of 0.3~m in simulation and 1.5~m on the real photos, where it measured a median of 1.2~m from GPS. A relocalization has 0.3~m and 2.0~m. Two sets of values are used because a single set made the filter far too cautious in simulation. The real-photo values were chosen from the accuracy measured on the same 58 photos on which they are then evaluated, which is a limitation discussed with the results.
 
-Before a map check or a relocalization is used, it must pass a $\chi^2$ gate. Its distance from the prediction, measured in standard deviations, $d^2 = \nu^{\top} S^{-1} \nu$, must not exceed 13.82, the 99.9\% bound for two dimensions. A fix outside that bound is rejected and counts as a failed fix. Odometry steps are not gated. They are limited only by the 15-match and scale rules of Chapter~\ref{chap:vo}.
+Before a map check or a relocalization is used, it must pass a $\chi^2$ gate \citep{barshalom2001}. Its distance from the prediction, measured in standard deviations, $d^2 = \nu^{\top} S^{-1} \nu$, must not exceed 13.82, the 99.9\% bound for two dimensions. A fix outside that bound is rejected and counts as a failed fix. Odometry steps are not gated. They are limited only by the 15-match and scale rules of Chapter~\ref{chap:vo}.
 
 The search radius is no longer a separate rule. It is read from the filter as three times the largest standard deviation of the position:
 \begin{equation}
@@ -822,7 +824,7 @@ Two details make the comparison with the rules fair. After an accepted fix the p
 
 \section{Simulated IMU}
 \label{sec:ekf-imu}
-Fabris's flight has no IMU log, so the IMU had to be simulated. DJI does not document which IMU chip the Phantom~4 uses, so the noise values are taken from the datasheet of the InvenSense MPU-6500, a consumer MEMS IMU of the same generation: an accelerometer noise density of 300~$\mu$g/$\sqrt{\mathrm{Hz}}$ and a gyroscope noise density of $0.01\,^{\circ}/\mathrm{s}/\sqrt{\mathrm{Hz}}$. The biases that remain after calibration are assumptions: 5~mg for the accelerometer and $0.05\,^{\circ}$/s for the gyroscope, with a bias drift of $10^{-4}$~m/s$^2$/$\sqrt{\mathrm{s}}$.
+Fabris's flight has no IMU log, so the IMU had to be simulated. DJI does not document which IMU chip the Phantom~4 uses, so the noise values are taken from the datasheet of the InvenSense MPU-6500 \citep{invensense2015mpu6500}, a consumer MEMS IMU of the same generation: an accelerometer noise density of 300~$\mu$g/$\sqrt{\mathrm{Hz}}$ and a gyroscope noise density of $0.01\,^{\circ}/\mathrm{s}/\sqrt{\mathrm{Hz}}$. The biases that remain after calibration are assumptions: 5~mg for the accelerometer and $0.05\,^{\circ}$/s for the gyroscope, with a bias drift of $10^{-4}$~m/s$^2$/$\sqrt{\mathrm{s}}$.
 
 The readings are generated from the simulated flight described in Section~\ref{sec:augmentations}, in which the drone flies a smooth curve through the waypoints at 5~m/s. The second derivative of that curve gives the true acceleration at 100~Hz, which is rotated into the drone's body frame with the true heading. A constant bias, drawn once per flight, its slow drift and white noise are then added. The gyroscope reading is the true turn rate plus a constant bias and its own white noise. One frame of 4.1~s therefore contains 410 IMU samples.
 
@@ -957,35 +959,120 @@ The important takeaway here is that the EKF is useful both with and without the 
 \phantomsection
 \begin{thebibliography}{99}
 
-\bibitem{detone2018superpoint}
-D.~DeTone, T.~Malisiewicz and A.~Rabinovich,
-``SuperPoint: Self-Supervised Interest Point Detection and Description'',
-in \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)}, 2018.
-arXiv:\href{https://arxiv.org/abs/1712.07629}{1712.07629}.
+\bibitem[Bar-Shalom et~al.(2001)]{barshalom2001}
+Bar-Shalom, Y., Li, X.~R., \& Kirubarajan, T. (2001).
+\textit{Estimation with applications to tracking and navigation: Theory, algorithms and software}.
+Wiley. \url{https://doi.org/10.1002/0471221279}
 
-\bibitem{sarlin2020superglue}
-P.-E.~Sarlin, D.~DeTone, T.~Malisiewicz and A.~Rabinovich,
-``SuperGlue: Learning Feature Matching with Graph Neural Networks'',
-in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2020.
-arXiv:\href{https://arxiv.org/abs/1911.11763}{1911.11763}.
+\bibitem[Bradski(2000)]{bradski2000opencv}
+Bradski, G. (2000).
+The OpenCV library.
+\textit{Dr. Dobb's Journal of Software Tools}.
 
-\bibitem{lindenberger2023lightglue}
-P.~Lindenberger, P.-E.~Sarlin and M.~Pollefeys,
-``LightGlue: Local Feature Matching at Light Speed'',
-in \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)}, 2023.
-arXiv:\href{https://arxiv.org/abs/2306.13643}{2306.13643}.
+\bibitem[Buslaev et~al.(2020)]{buslaev2020albumentations}
+Buslaev, A., Iglovikov, V.~I., Khvedchenya, E., Parinov, A., Druzhinin, M., \& Kalinin, A.~A. (2020).
+Albumentations: Fast and flexible image augmentations.
+\textit{Information}, \textit{11}(2), 125. \url{https://doi.org/10.3390/info11020125}
 
-\bibitem{sun2021loftr}
-J.~Sun, Z.~Shen, Y.~Wang, H.~Bao and X.~Zhou,
-``LoFTR: Detector-Free Local Feature Matching with Transformers'',
-in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2021.
-arXiv:\href{https://arxiv.org/abs/2104.00680}{2104.00680}.
+\bibitem[Deng et~al.(2009)]{deng2009imagenet}
+Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., \& Fei-Fei, L. (2009).
+ImageNet: A large-scale hierarchical image database.
+In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition} (pp.~248--255). \url{https://doi.org/10.1109/CVPR.2009.5206848}
 
-\bibitem{wang2024efficientloftr}
-Y.~Wang, X.~He, S.~Peng, D.~Tan and X.~Zhou,
-``Efficient LoFTR: Semi-Dense Local Feature Matching with Sparse-Like Speed'',
-in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2024.
-arXiv:\href{https://arxiv.org/abs/2403.04765}{2403.04765}.
+\bibitem[DeTone et~al.(2018)]{detone2018superpoint}
+DeTone, D., Malisiewicz, T., \& Rabinovich, A. (2018).
+SuperPoint: Self-supervised interest point detection and description.
+In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops} (pp.~224--236). \url{https://arxiv.org/abs/1712.07629}
+
+\bibitem[DJI(2016)]{dji2016phantom4}
+DJI. (2016).
+\textit{Phantom 4 user manual}.
+SZ DJI Technology Co., Ltd.
+
+\bibitem[Fischler \& Bolles(1981)]{fischler1981ransac}
+Fischler, M.~A., \& Bolles, R.~C. (1981).
+Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography.
+\textit{Communications of the ACM}, \textit{24}(6), 381--395. \url{https://doi.org/10.1145/358669.358692}
+
+\bibitem[He et~al.(2016)]{he2016resnet}
+He, K., Zhang, X., Ren, S., \& Sun, J. (2016).
+Deep residual learning for image recognition.
+In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition} (pp.~770--778). \url{https://doi.org/10.1109/CVPR.2016.90}
+
+\bibitem[InvenSense(2015)]{invensense2015mpu6500}
+InvenSense. (2015).
+\textit{MPU-6500 product specification}.
+InvenSense Inc.
+
+\bibitem[Kalman(1960)]{kalman1960}
+Kalman, R.~E. (1960).
+A new approach to linear filtering and prediction problems.
+\textit{Journal of Basic Engineering}, \textit{82}(1), 35--45. \url{https://doi.org/10.1115/1.3662552}
+
+\bibitem[Lin et~al.(2014)]{lin2014coco}
+Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Doll{\'a}r, P., \& Zitnick, C.~L. (2014).
+Microsoft COCO: Common objects in context.
+In \textit{Computer Vision -- ECCV 2014} (pp.~740--755). Springer. \url{https://doi.org/10.1007/978-3-319-10602-1_48}
+
+\bibitem[Lindenberger et~al.(2023)]{lindenberger2023lightglue}
+Lindenberger, P., Sarlin, P.-E., \& Pollefeys, M. (2023).
+LightGlue: Local feature matching at light speed.
+In \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision} (pp.~17627--17638). \url{https://arxiv.org/abs/2306.13643}
+
+\bibitem[Lowe(2004)]{lowe2004sift}
+Lowe, D.~G. (2004).
+Distinctive image features from scale-invariant keypoints.
+\textit{International Journal of Computer Vision}, \textit{60}(2), 91--110. \url{https://doi.org/10.1023/B:VISI.0000029664.99615.94}
+
+\bibitem[Rublee et~al.(2011)]{rublee2011orb}
+Rublee, E., Rabaud, V., Konolige, K., \& Bradski, G. (2011).
+ORB: An efficient alternative to SIFT or SURF.
+In \textit{Proceedings of the IEEE International Conference on Computer Vision} (pp.~2564--2571). \url{https://doi.org/10.1109/ICCV.2011.6126544}
+
+\bibitem[Sarlin et~al.(2020)]{sarlin2020superglue}
+Sarlin, P.-E., DeTone, D., Malisiewicz, T., \& Rabinovich, A. (2020).
+SuperGlue: Learning feature matching with graph neural networks.
+In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~4938--4947). \url{https://arxiv.org/abs/1911.11763}
+
+\bibitem[Sun et~al.(2021)]{sun2021loftr}
+Sun, J., Shen, Z., Wang, Y., Bao, H., \& Zhou, X. (2021).
+LoFTR: Detector-free local feature matching with transformers.
+In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~8922--8931). \url{https://arxiv.org/abs/2104.00680}
+
+\bibitem[Tan \& Le(2019)]{tan2019efficientnet}
+Tan, M., \& Le, Q.~V. (2019).
+EfficientNet: Rethinking model scaling for convolutional neural networks.
+In \textit{Proceedings of the 36th International Conference on Machine Learning} (pp.~6105--6114). PMLR.
+
+\bibitem[TorchVision maintainers and contributors(2016)]{torchvision2016}
+TorchVision maintainers and contributors. (2016).
+\textit{TorchVision: PyTorch's computer vision library} [Computer software].
+GitHub. \url{https://github.com/pytorch/vision}
+
+\bibitem[Wang et~al.(2024)]{wang2024efficientloftr}
+Wang, Y., He, X., Peng, S., Tan, D., \& Zhou, X. (2024).
+Efficient LoFTR: Semi-dense local feature matching with sparse-like speed.
+In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~21666--21675). \url{https://arxiv.org/abs/2403.04765}
+
+\bibitem[Wolf et~al.(2020)]{wolf2020transformers}
+Wolf, T., Debut, L., Sanh, V., Chaumond, J., Delangue, C., Moi, A., Cistac, P., Rault, T., Louf, R., Funtowicz, M., Davison, J., Shleifer, S., von Platen, P., Ma, C., Jernite, Y., Plu, J., Xu, C., Le Scao, T., Gugger, S., \ldots\ Rush, A.~M. (2020).
+Transformers: State-of-the-art natural language processing.
+In \textit{Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations} (pp.~38--45). \url{https://doi.org/10.18653/v1/2020.emnlp-demos.6}
+
+\bibitem[Yi et~al.(2016)]{yi2016lift}
+Yi, K.~M., Trulls, E., Lepetit, V., \& Fua, P. (2016).
+LIFT: Learned invariant feature transform.
+In \textit{Computer Vision -- ECCV 2016} (pp.~467--483). Springer. \url{https://doi.org/10.1007/978-3-319-46466-4_28}
+
+\bibitem[Zheng et~al.(2020)]{zheng2020university}
+Zheng, Z., Wei, Y., \& Yang, Y. (2020).
+University-1652: A multi-view multi-source benchmark for drone-based geo-localization.
+In \textit{Proceedings of the 28th ACM International Conference on Multimedia} (pp.~1395--1403). \url{https://doi.org/10.1145/3394171.3413896}
+
+\bibitem[Zhou et~al.(2018)]{zhou2018places}
+Zhou, B., Lapedriza, A., Khosla, A., Oliva, A., \& Torralba, A. (2018).
+Places: A 10 million image database for scene recognition.
+\textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, \textit{40}(6), 1452--1464. \url{https://doi.org/10.1109/TPAMI.2017.2723009}
 
 \end{thebibliography}
 
