@@ -156,6 +156,15 @@ EfficientNet, as the name suggests, focuses on the efficiency of convolutional n
 Both networks were originally built for classification, so their last layers, which output a class, were removed. What remains is a stack of feature maps, and these are turned into a single fingerprint with global average pooling, which averages each feature map into one number \citep{lin2014nin}. The result is a vector of 2048 numbers for ResNet50 and 1280 for EfficientNet-B0. Each vector is then normalized to a length of one, so that the similarity of two fingerprints can be measured simply by their dot product.
 
 \section{Visual odometry and dead reckoning}
+\label{sec:bg-vo}
+Dead reckoning is one of the oldest navigation methods used in sailing. A ship's navigator estimates the current position from the last known position, the ship's speed and heading, and the time that has passed since that position was known. The same principle applies to a drone. Its main weakness is that every small error in the measured motion is added to the position and never removed, so the error grows the longer the drone flies without an external correction. This growth is called drift.
+
+Szyku{\l}a and Furtak \citeyearpar{szykula_furtak} present a dead reckoning method for UAVs in conditions of limited GPS signal, based on the analysis of data from inertial measurement units (IMUs) and mathematical algorithms. The orientation of the drone is estimated from the gyroscope, accelerometer and magnetometer, and the acceleration is integrated over time to obtain the velocity and then the position. Tested on logs of real flights, the method accumulated errors of more than a hundred meters without GPS, while a GPS update every 15~s kept the error at about 12 to 22~m. The authors conclude that dead reckoning is effective for short durations and as a temporary complement to GPS, but not reliable for long flights without an external correction. They name wind as the main unresolved problem, since the sensors cannot tell the drone's motion through the air from its motion over the ground, and suggest optical flow as one possible solution.
+
+Visual odometry solves the same problem with a camera instead. It is essentially the process of estimating the motion of a vehicle using only the images of one or more cameras attached to it \citep{scaramuzza2011vo}. The term was introduced by \citet{nister2004vo}, who estimated the motion of a single camera or a stereo camera pair in real time from video. Visual odometry works by comparing consecutive images, estimating the motion between them and adding that motion to the previous position. In other words, it is a form of dead reckoning in which the motion is measured by the camera, so it drifts in the same way. Its advantage over inertial dead reckoning is that a downward-looking camera sees the ground itself, so it measures the motion over the ground and is not affected by wind. Its limitation is that it needs enough light, texture and overlap between consecutive images.
+
+In the visual odometry used in this thesis, the camera looks straight down at ground that is roughly flat, so between two images the view can only shift, rotate and change scale when the altitude changes. Every correct pair of keypoints matched by SuperPoint and LightGlue (Section~\ref{sec:bg-features}) must therefore follow the same transformation with four unknowns, a so-called similarity transform. Among the matches, however, some are always wrong, and they can disrupt the accuracy of the visual odometry estimate. For that reason, the transformation is estimated with RANSAC \citep{fischler1981ransac}. RANSAC repeatedly picks the smallest random set of matches that defines a model, two pairs in the case of a similarity, computes the model and counts how many of the other matches agree with it. The model with the most agreeing matches (the inliers) is kept. This makes the estimate robust even when a large part of the matches is wrong.
+
 \section{IMU and sensor fusion}
 \section{Related work}
 \section{Autoencoder-based localization (Fabris et al.)}
@@ -1049,6 +1058,11 @@ Lowe, D.~G. (2004).
 Distinctive image features from scale-invariant keypoints.
 \textit{International Journal of Computer Vision}, \textit{60}(2), 91--110. \url{https://doi.org/10.1023/B:VISI.0000029664.99615.94}
 
+\bibitem[Nist{\'e}r et~al.(2004)]{nister2004vo}
+Nist{\'e}r, D., Naroditsky, O., \& Bergen, J. (2004).
+Visual odometry.
+In \textit{Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition} (Vol.~1, pp.~I-652--I-659). \url{https://doi.org/10.1109/CVPR.2004.1315094}
+
 \bibitem[Rublee et~al.(2011)]{rublee2011orb}
 Rublee, E., Rabaud, V., Konolige, K., \& Bradski, G. (2011).
 ORB: An efficient alternative to SIFT or SURF.
@@ -1069,10 +1083,20 @@ Sarlin, P.-E., DeTone, D., Malisiewicz, T., \& Rabinovich, A. (2020).
 SuperGlue: Learning feature matching with graph neural networks.
 In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~4938--4947). \url{https://arxiv.org/abs/1911.11763}
 
+\bibitem[Scaramuzza \& Fraundorfer(2011)]{scaramuzza2011vo}
+Scaramuzza, D., \& Fraundorfer, F. (2011).
+Visual odometry [Tutorial].
+\textit{IEEE Robotics \& Automation Magazine}, \textit{18}(4), 80--92. \url{https://doi.org/10.1109/MRA.2011.943233}
+
 \bibitem[Sun et~al.(2021)]{sun2021loftr}
 Sun, J., Shen, Z., Wang, Y., Bao, H., \& Zhou, X. (2021).
 LoFTR: Detector-free local feature matching with transformers.
 In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~8922--8931). \url{https://arxiv.org/abs/2104.00680}
+
+% TODO: complete this reference (authors' initials, year, title, journal, volume, pages, DOI)
+\bibitem[Szyku{\l}a \& Furtak(n.d.)]{szykula_furtak}
+Szyku{\l}a, \& Furtak. (n.d.).
+\textit{[Dead reckoning for UAVs with limited GPS signal: full reference to be added]}.
 
 \bibitem[Tan \& Le(2019)]{tan2019efficientnet}
 Tan, M., \& Le, Q.~V. (2019).
