@@ -119,7 +119,24 @@ write your abstract here
 
 \chapter{Background and related work}
 \label{chap:background}
+At the core of this project is the computer vision aspect of deep learning, specifically accurate feature detection, keypoint generation and subsequent matching. This allows us to decompose elements of the given scenery down to its minute details, to be used later as reference points for robust odometry. The feature extractors and matchers used in the pipeline introduced in this thesis rely on deep neural networks and descriptor vectors in order to achieve the highest accuracy without the need to retrain the matchers on new data every time. In this chapter we cover the tools and methods that went into creating the pipeline, which is described in detail in the later chapters.
+
 \section{Feature extraction and matching}
+\label{sec:bg-features}
+SuperPoint~\cite{detone2018superpoint} is a self-supervised framework for training interest point detectors and descriptors to solve multiple-view geometry problems in computer vision. It is essentially a fully-convolutional model that processes full-sized images and computes pixel-level interest point locations and their associated descriptors in one forward pass. Its training uses Homographic Adaptation, a multi-scale, multi-homography approach for boosting interest point detection repeatability and cross-domain adaptation. Trained on the MS-COCO dataset with this approach, it detects a much richer set of interest points than its initial, pre-adapted version and than traditional corner detectors, and it achieves state-of-the-art homography estimation compared with LIFT, SIFT and ORB. For its state-of-the-art accuracy, efficiency, open-source access, and the absence of any need to retrain the model on a new dataset, it has been chosen as the core of one of the two visual odometry pipelines tested in this thesis.
+
+SuperGlue~\cite{sarlin2020superglue} is a neural network whose purpose is to match two sets of local features by jointly finding correspondences and rejecting non-matchable points. The matches are found by solving a differentiable optimal transport problem, whose costs are predicted by a graph neural network. The uniqueness of the SuperGlue approach is that it introduces a flexible context aggregation mechanism, based on attention, which allows the network to reason about the underlying 3D scene and the feature assignments at the same time. Instead of relying on hand-designed heuristics, it learns priors about geometric transformations and the regularities of the 3D world from image pairs. It outperforms other learned approaches and achieves state-of-the-art results in pose estimation in both indoor and outdoor environments. In order to use the full capability of the system, SuperPoint was used as the feature detection network while SuperGlue played the role of the matcher.
+
+The early experiments of the project, however, pointed to a serious setback in using the SuperPoint + SuperGlue system as it is: its computational cost is a concern for real-time performance on the limited hardware of a drone. For that reason, its better optimized and more lightweight successor, LightGlue, was selected.
+
+LightGlue~\cite{lindenberger2023lightglue} is a deep neural network that revisits and improves SuperGlue. It requires less memory and computational power, it is more accurate, and it adapts to the difficulty of the given problem. On images with greater overlap, or with other visual features that make it easier to match common pairs of keypoints, it runs much faster, while on harder images it takes more time to analyze the keypoints correctly.
+
+For the computer vision part of the pipeline, the logical alternative to a detector-based system, which first detects keypoints and then matches them, is a detector-free system, which matches the images directly. Hence LoFTR and its more lightweight successor EfficientLoFTR were selected for this project.
+
+LoFTR~\cite{sun2021loftr} is a detector-free local feature matcher. It first establishes pixel-wise dense matches at a coarse level and later refines the good matches at a fine level. In contrast to dense methods that use a cost volume to search for correspondences, LoFTR uses self- and cross-attention layers in a Transformer to obtain feature descriptors that are conditioned on both images. The global receptive field of the Transformer allows the network to produce dense matches even in low-texture areas, where feature detectors usually struggle. At the time of its release, LoFTR outperformed state-of-the-art methods by a large margin.
+
+EfficientLoFTR~\cite{wang2024efficientloftr}, as the name suggests, is a more efficient semi-dense alternative to its predecessor, based on an aggregated attention mechanism with adaptive token selection. A novel two-stage correlation layer is used to achieve accurate subpixel correspondences, resulting in higher accuracy. The model is about 2.5 times faster than the original LoFTR, and its efficiency can even surpass that of the SuperPoint + LightGlue pipeline. On paper, this made it a solid choice for our geo-localization pipeline. The tests, however, showed it to be unsuitable for this task, because rotation and changes in color and lighting each broke its matching (Chapter~\ref{chap:vo}).
+
 \section{CNNs and image retrieval}
 \section{Visual odometry and dead reckoning}
 \section{IMU and sensor fusion}
@@ -940,10 +957,35 @@ The important takeaway here is that the EKF is useful both with and without the 
 \phantomsection
 \begin{thebibliography}{99}
 
-% Add references here, e.g.:
-% \bibitem{key} Author A., Author B., ``Title'', Journal/Conference, Year.
+\bibitem{detone2018superpoint}
+D.~DeTone, T.~Malisiewicz and A.~Rabinovich,
+``SuperPoint: Self-Supervised Interest Point Detection and Description'',
+in \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)}, 2018.
+arXiv:\href{https://arxiv.org/abs/1712.07629}{1712.07629}.
 
-\bibitem{placeholder} References will be added here.
+\bibitem{sarlin2020superglue}
+P.-E.~Sarlin, D.~DeTone, T.~Malisiewicz and A.~Rabinovich,
+``SuperGlue: Learning Feature Matching with Graph Neural Networks'',
+in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2020.
+arXiv:\href{https://arxiv.org/abs/1911.11763}{1911.11763}.
+
+\bibitem{lindenberger2023lightglue}
+P.~Lindenberger, P.-E.~Sarlin and M.~Pollefeys,
+``LightGlue: Local Feature Matching at Light Speed'',
+in \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)}, 2023.
+arXiv:\href{https://arxiv.org/abs/2306.13643}{2306.13643}.
+
+\bibitem{sun2021loftr}
+J.~Sun, Z.~Shen, Y.~Wang, H.~Bao and X.~Zhou,
+``LoFTR: Detector-Free Local Feature Matching with Transformers'',
+in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2021.
+arXiv:\href{https://arxiv.org/abs/2104.00680}{2104.00680}.
+
+\bibitem{wang2024efficientloftr}
+Y.~Wang, X.~He, S.~Peng, D.~Tan and X.~Zhou,
+``Efficient LoFTR: Semi-Dense Local Feature Matching with Sparse-Like Speed'',
+in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2024.
+arXiv:\href{https://arxiv.org/abs/2403.04765}{2403.04765}.
 
 \end{thebibliography}
 
