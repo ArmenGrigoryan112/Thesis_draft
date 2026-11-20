@@ -160,7 +160,7 @@ Both networks were originally built for classification, so their last layers, wh
 \label{sec:bg-vo}
 Dead reckoning is one of the oldest navigation methods used in sailing. A ship's navigator estimates the current position from the last known position, the ship's speed and heading, and the time that has passed since that position was known. The same principle applies to a drone. Its main weakness is that every small error in the measured motion is added to the position and never removed, so the error grows the longer the drone flies without an external correction. This growth is called drift.
 
-Szyku{\l}a and Furtak \citeyearpar{szykula_furtak} present a dead reckoning method for UAVs in conditions of limited GPS signal, based on the analysis of data from inertial measurement units (IMUs) and mathematical algorithms. The orientation of the drone is estimated from the gyroscope, accelerometer and magnetometer, and the acceleration is integrated over time to obtain the velocity and then the position. Tested on logs of real flights, the method accumulated errors of more than a hundred meters without GPS, while a GPS update every 15~s kept the error at about 12 to 22~m. The authors conclude that dead reckoning is effective for short durations and as a temporary complement to GPS, but not reliable for long flights without an external correction. They name wind as the main unresolved problem, since the sensors cannot tell the drone's motion through the air from its motion over the ground, and suggest optical flow as one possible solution.
+Szyku{\l}a and Furtak \citeyearpar{szykula2025deadreckoning} present a dead reckoning method for UAVs in conditions of limited GPS signal, based on the analysis of data from inertial measurement units (IMUs) and mathematical algorithms. The orientation of the drone is estimated from the gyroscope, accelerometer and magnetometer, and the acceleration is integrated over time to obtain the velocity and then the position. Tested on logs of real flights, the method accumulated errors of more than a hundred meters without GPS, while a GPS update every 15~s kept the error at about 12 to 22~m. The authors conclude that dead reckoning is effective for short durations and as a temporary complement to GPS, but not reliable for long flights without an external correction. They name wind as the main unresolved problem, since the sensors cannot tell the drone's motion through the air from its motion over the ground, and suggest optical flow as one possible solution.
 
 Visual odometry solves the same problem with a camera instead. It is essentially the process of estimating the motion of a vehicle using only the images of one or more cameras attached to it \citep{scaramuzza2011vo}. The term was introduced by \citet{nister2004vo}, who estimated the motion of a single camera or a stereo camera pair in real time from video. Visual odometry works by comparing consecutive images, estimating the motion between them and adding that motion to the previous position. In other words, it is a form of dead reckoning in which the motion is measured by the camera, so it drifts in the same way. Its advantage over inertial dead reckoning is that a downward-looking camera sees the ground itself, so it measures the motion over the ground and is not affected by wind. Its limitation is that it needs enough light, texture and overlap between consecutive images.
 
@@ -174,7 +174,7 @@ The pipeline produces three kinds of measurements: the movement measured by visu
 
 The Kalman filter \citep{kalman1960} keeps an estimate of the drone's position and velocity together with its uncertainty. In the prediction step, it moves the state forward in time with a model of the motion and increases the uncertainty. In the update step, it corrects the state with a new measurement, and the size of the correction depends on how certain the prediction and the measurement are: a precise map check moves the estimate a lot, while a noisy odometry step moves it only a little. The extended Kalman filter does the same for motion and measurements that are not linear, such as a drone that turns.
 
-A filter can also take in measurements from an inertial measurement unit (IMU), which contains accelerometers and gyroscopes. An IMU on its own drifts quickly, since every small error is integrated over time \citep{szykula_furtak}, but combined with the camera it bridges the moments when vision fails, while the camera removes its drift. The reference point for this combination is VINS-Mono \citep{qin2018vinsmono}, which fuses a single camera with a low-cost IMU and was demonstrated in autonomous flight on board a small drone. Instead of a filter, it uses a nonlinear optimization over a window of recent frames, which is more demanding in computation. It also has no map, so it can only recognize places it has already visited. An EKF processes one measurement at a time, which suits both the step-by-step structure of our pipeline and the limited on-board computer of the drone. The flights available for this thesis do not include IMU recordings, so the EKF was tested both without an IMU and with a simulated one (Chapter~\ref{chap:ekf}).
+A filter can also take in measurements from an inertial measurement unit (IMU), which contains accelerometers and gyroscopes. An IMU on its own drifts quickly, since every small error is integrated over time \citep{szykula2025deadreckoning}, but combined with the camera it bridges the moments when vision fails, while the camera removes its drift. The reference point for this combination is VINS-Mono \citep{qin2018vinsmono}, which fuses a single camera with a low-cost IMU and was demonstrated in autonomous flight on board a small drone. Instead of a filter, it uses a nonlinear optimization over a window of recent frames, which is more demanding in computation. It also has no map, so it can only recognize places it has already visited. An EKF processes one measurement at a time, which suits both the step-by-step structure of our pipeline and the limited on-board computer of the drone. The flights available for this thesis do not include IMU recordings, so the EKF was tested both without an IMU and with a simulated one (Chapter~\ref{chap:ekf}).
 
 \section{Related work}
 \label{sec:bg-related}
@@ -186,7 +186,7 @@ Some of the earliest work used CNNs to recognize the district a drone is flying 
 
 The work closest to ours in its matching is \textit{Analysis of Deep Feature Matching Algorithms in UAV Visual Localization} \citep{prutyanov2024deepmatch}. It localizes a UAV in three degrees of freedom with pretrained SuperPoint and LightGlue, used without fine-tuning both for the short-term motion between frames and for matching frames against the map. It also shows that the two networks can refine the estimate of a less accurate localization method. Evaluated on an NVIDIA Jetson Orin Nano, it reached acceptable performance for real-time localization, using the same matcher and the same on-board computer as this thesis.
 
-Other recent systems combine several of these components. \citet{walczak2025_tba} estimate the drone's motion from the optical flow of a downward-facing camera and its heading from the IMU, reaching average errors of about 11 to 60~m on real flights, since without a map nothing removes the drift. \citet{tang2025citylevel} match aerial images against a two-dimensional city map with a Vision Transformer and fuse the result with visual odometry and GNSS in a particle filter, which localized aerial images in real time over more than 1000~km$^2$ of four cities. Its structure, with retrieval against a map, odometry in between and a filter combining the two, is the closest to the pipeline of this thesis.
+Other recent systems combine several of these components. \citet{walczak2025fusion} estimate the drone's motion from the optical flow of a downward-facing camera and its heading from the IMU, reaching average errors of about 11 to 60~m on real flights, since without a map nothing removes the drift. \citet{tang2025citylevel} match aerial images against a two-dimensional city map with a Vision Transformer and fuse the result with visual odometry and GNSS in a particle filter, which localized aerial images in real time over more than 1000~km$^2$ of four cities. Its structure, with retrieval against a map, odometry in between and a filter combining the two, is the closest to the pipeline of this thesis.
 
 The newest direction is foundation models: networks trained on very large image collections whose features work for many tasks without fine-tuning. DINOv2 is the best-known example \citep{oquab2023dinov2}, and AnyLoc showed that its features, without any training for place recognition, work across urban, indoor, aerial and underwater environments \citep{keetha2023anyloc}. \citet{li2024crossview} kept DINOv2 frozen and trained only a small adapter for drone-to-satellite retrieval on University-1652, without any labeled image pairs. These works follow the same idea as this thesis, pretrained networks without fine-tuning, with a stronger network, and they are a natural next step for the retrieval stage (Chapter~\ref{chap:conclusions}).
 
@@ -1068,9 +1068,8 @@ Durgam, A., Paheding, S., Dhiman, V., \& Devabhaktuni, V. (2024).
 Cross-view geo-localization: A survey.
 \textit{IEEE Access}, \textit{12}. \url{https://doi.org/10.1109/ACCESS.2024.3507280}
 
-% TODO: add Fabris's first-name initial(s) after "Fabris,"
 \bibitem[Fabris(2025)]{fabris2025thesis}
-Fabris. (2025).
+Fabris, A. (2025).
 \textit{Real-time localization algorithm for GPS-denied drone navigation} [Unpublished master's thesis].
 University of Udine.
 
@@ -1189,12 +1188,10 @@ Sun, J., Shen, Z., Wang, Y., Bao, H., \& Zhou, X. (2021).
 LoFTR: Detector-free local feature matching with transformers.
 In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~8922--8931). \url{https://arxiv.org/abs/2104.00680}
 
-% TODO: complete this reference (authors' initials, year, volume, issue, pages, DOI)
-\bibitem[Szyku{\l}a \& Furtak(n.d.)]{szykula_furtak}
-Szyku{\l}a, \& Furtak. (n.d.).
+\bibitem[Szyku{\l}a \& Furtak(2025)]{szykula2025deadreckoning}
+Szyku{\l}a, B., \& Furtak, J. (2025).
 Dead reckoning method for an unmanned aerial vehicle in conditions of limited GPS signal.
-\textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}.
-\url{https://www.transnav.eu/Article_Dead_Reckoning_Method_for_an_Unmanned_Szykula,76,1591.html}
+\textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}, \textit{19}(4), 1063--1068. \url{https://doi.org/10.12716/1001.19.04.01}
 
 \bibitem[Tan \& Le(2019)]{tan2019efficientnet}
 Tan, M., \& Le, Q.~V. (2019).
@@ -1211,11 +1208,10 @@ TorchVision maintainers and contributors. (2016).
 \textit{TorchVision: PyTorch's computer vision library} [Computer software].
 GitHub. \url{https://github.com/pytorch/vision}
 
-% TODO: complete this reference (authors, full title, volume, issue, pages)
-\bibitem[Walczak et~al.(2025)]{walczak2025_tba}
-Walczak et al. (2025).
-\textit{Fusion of optical flow and dead reckoning [full title and reference to be added]}.
-\textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}. \url{https://www.transnav.eu/Article_Fusion_of_Optical_Flow_and_Dead_Walczak,76,1592.html}
+\bibitem[Walczak et~al.(2025)]{walczak2025fusion}
+Walczak, J., Szyku{\l}a, B., Targowski, P., \& Pa{\l}ys, T. (2025).
+Fusion of optical flow and dead reckoning algorithms for UAV navigation without GPS.
+\textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}, \textit{19}(4), 1069--1074. \url{https://doi.org/10.12716/1001.19.04.02}
 
 \bibitem[Y.~Wang et~al.(2024)]{wang2024efficientloftr}
 Wang, Y., He, X., Peng, S., Tan, D., \& Zhou, X. (2024).
