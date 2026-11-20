@@ -165,7 +165,16 @@ Visual odometry solves the same problem with a camera instead. It is essentially
 
 In the visual odometry used in this thesis, the camera looks straight down at ground that is roughly flat, so between two images the view can only shift, rotate and change scale when the altitude changes. Every correct pair of keypoints matched by SuperPoint and LightGlue (Section~\ref{sec:bg-features}) must therefore follow the same transformation with four unknowns, a so-called similarity transform. Among the matches, however, some are always wrong, and they can disrupt the accuracy of the visual odometry estimate. For that reason, the transformation is estimated with RANSAC \citep{fischler1981ransac}. RANSAC repeatedly picks the smallest random set of matches that defines a model, two pairs in the case of a similarity, computes the model and counts how many of the other matches agree with it. The model with the most agreeing matches (the inliers) is kept. This makes the estimate robust even when a large part of the matches is wrong.
 
-\section{IMU and sensor fusion}
+\section{Sensor fusion with the extended Kalman filter}
+\label{sec:bg-ekf}
+In this section we cover the extended Kalman filter (EKF), which is used in the third stage of our pipeline (Chapter~\ref{chap:ekf}) to combine the measurements of the previous stages into a single estimate of the drone's position.
+
+The pipeline produces three kinds of measurements: the movement measured by visual odometry, the position given by a map check and the position found by relocalization. They differ in how much they can be trusted, and each of them has gaps that the others can cover. Combining measurements of different reliability into one estimate is called sensor fusion, and filtering is one of its main approaches \citep{liu_sensorfusion}.
+
+The Kalman filter \citep{kalman1960} keeps an estimate of the drone's position and velocity together with its uncertainty. In the prediction step, it moves the state forward in time with a model of the motion and increases the uncertainty. In the update step, it corrects the state with a new measurement, and the size of the correction depends on how certain the prediction and the measurement are: a precise map check moves the estimate a lot, while a noisy odometry step moves it only a little. The extended Kalman filter does the same for motion and measurements that are not linear, such as a drone that turns.
+
+A filter can also take in measurements from an inertial measurement unit (IMU), which contains accelerometers and gyroscopes. An IMU on its own drifts quickly, since every small error is integrated over time \citep{szykula_furtak}, but combined with the camera it bridges the moments when vision fails, while the camera removes its drift. The reference point for this combination is VINS-Mono \citep{qin2018vinsmono}, which fuses a single camera with a low-cost IMU and was demonstrated in autonomous flight on board a small drone. Instead of a filter, it uses a nonlinear optimization over a window of recent frames, which is more demanding in computation. It also has no map, so it can only recognize places it has already visited. An EKF processes one measurement at a time, which suits both the step-by-step structure of our pipeline and the limited on-board computer of the drone. The flights available for this thesis do not include IMU recordings, so the EKF was tested both without an IMU and with a simulated one (Chapter~\ref{chap:ekf}).
+
 \section{Related work}
 \section{Autoencoder-based localization (Fabris et al.)}
 
@@ -1053,6 +1062,11 @@ Lindenberger, P., Sarlin, P.-E., \& Pollefeys, M. (2023).
 LightGlue: Local feature matching at light speed.
 In \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision} (pp.~17627--17638). \url{https://arxiv.org/abs/2306.13643}
 
+% TODO: complete this reference (which Liu et al. paper on sensor fusion is meant: authors, year, title, venue, DOI)
+\bibitem[Liu et~al.(n.d.)]{liu_sensorfusion}
+Liu et al. (n.d.).
+\textit{[Sensor fusion survey: full reference to be added]}.
+
 \bibitem[Lowe(2004)]{lowe2004sift}
 Lowe, D.~G. (2004).
 Distinctive image features from scale-invariant keypoints.
@@ -1062,6 +1076,11 @@ Distinctive image features from scale-invariant keypoints.
 Nist{\'e}r, D., Naroditsky, O., \& Bergen, J. (2004).
 Visual odometry.
 In \textit{Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition} (Vol.~1, pp.~I-652--I-659). \url{https://doi.org/10.1109/CVPR.2004.1315094}
+
+\bibitem[Qin et~al.(2018)]{qin2018vinsmono}
+Qin, T., Li, P., \& Shen, S. (2018).
+VINS-Mono: A robust and versatile monocular visual-inertial state estimator.
+\textit{IEEE Transactions on Robotics}, \textit{34}(4), 1004--1020. \url{https://doi.org/10.1109/TRO.2018.2853729}
 
 \bibitem[Rublee et~al.(2011)]{rublee2011orb}
 Rublee, E., Rabaud, V., Konolige, K., \& Bradski, G. (2011).
