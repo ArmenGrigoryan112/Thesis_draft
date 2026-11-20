@@ -47,6 +47,7 @@
 %\counterwithout{footnote}{chapter}
 \usepackage[round,authoryear]{natbib}% APA-style author-year citations
 \setlength{\bibhang}{1.27cm}% APA hanging indent
+\renewcommand{\bibfont}{\raggedright}% APA reference list: left-aligned
 \usepackage{hyperref}
 \hypersetup{
 			hyperfootnotes=true,			
@@ -176,7 +177,32 @@ The Kalman filter \citep{kalman1960} keeps an estimate of the drone's position a
 A filter can also take in measurements from an inertial measurement unit (IMU), which contains accelerometers and gyroscopes. An IMU on its own drifts quickly, since every small error is integrated over time \citep{szykula_furtak}, but combined with the camera it bridges the moments when vision fails, while the camera removes its drift. The reference point for this combination is VINS-Mono \citep{qin2018vinsmono}, which fuses a single camera with a low-cost IMU and was demonstrated in autonomous flight on board a small drone. Instead of a filter, it uses a nonlinear optimization over a window of recent frames, which is more demanding in computation. It also has no map, so it can only recognize places it has already visited. An EKF processes one measurement at a time, which suits both the step-by-step structure of our pipeline and the limited on-board computer of the drone. The flights available for this thesis do not include IMU recordings, so the EKF was tested both without an IMU and with a simulated one (Chapter~\ref{chap:ekf}).
 
 \section{Related work}
+\label{sec:bg-related}
+Due to the volume of research in recent years directed towards the development of more and more advanced deep learning models, it is only logical that computer vision-based systems would be tested for drone geo-localization. This section covers a few examples of such systems, with our pipeline being a direct competitor to them in terms of efficiency and accuracy.
+
+Finding where an image was taken by comparing it with a database of known places is studied in the field of visual place recognition. Over the last decade, the image descriptions used for this task have shifted from hand-crafted features to features learned by neural networks \citep{masone2021vpr}. When the query and the reference are seen from different viewpoints, such as a drone image and a satellite map, the task is called cross-view geo-localization. Its methods, datasets and open challenges are reviewed by \citet{durgam2024crossview}. The first benchmark for drones is University-1652, which contains images of 1652 university buildings seen from synthetic drones, satellites and ground cameras, and defines two tasks: locating a place from drone images and guiding a drone to a place shown in a satellite image \citep{zheng2020university}. The authors also analyze a variety of standard CNN features on it, the same kind of pretrained features used by the retrievers in this thesis.
+
+Some of the earliest work used CNNs to recognize the district a drone is flying over from the look of its buildings \citep{amer2017urban}. \citet{nassar2018registration} went further by registering each camera frame against an image generated from the satellite map at the drone's estimated position and by refining the result with matched semantic shapes, an idea close to the map check of our pipeline. Cabrera-Ponce and Martinez-Carranza \citeyearpar{cabrera2022geoloc} instead trained a compact CNN to estimate the drone's position directly from a single image, with average errors of 2.8 to 6.1~m at more than 100 frames per second. Another approach sorts the satellite patches along the drone's trajectory, so that each frame only has to be matched against a short sequence of patches rather than the whole map \citep{seqmatch_tba}.
+
+The work closest to ours in its matching is \textit{Analysis of Deep Feature Matching Algorithms in UAV Visual Localization} \citep{deepmatch2024_tba}. It localizes a UAV in three degrees of freedom with pretrained SuperPoint and LightGlue, used without fine-tuning both for the short-term motion between frames and for matching frames against the map. It also shows that the two networks can refine the estimate of a less accurate localization method. Evaluated on an NVIDIA Jetson Orin Nano, it reached acceptable performance for real-time localization, using the same matcher and the same on-board computer as this thesis.
+
+Other recent systems combine several of these components. \citet{walczak2025_tba} estimate the drone's motion from the optical flow of a downward-facing camera and its heading from the IMU, reaching average errors of about 11 to 60~m on real flights, since without a map nothing removes the drift. \citet{tang2025_tba} match aerial images against a two-dimensional city map with a Vision Transformer and fuse the result with visual odometry and GNSS in a particle filter, which localized aerial images in real time over more than 1000~km$^2$ of four cities. Its structure, with retrieval against a map, odometry in between and a filter combining the two, is the closest to the pipeline of this thesis.
+
+The newest direction is foundation models: networks trained on very large image collections whose features work for many tasks without fine-tuning. DINOv2 is the best-known example \citep{oquab2023dinov2}, and AnyLoc showed that its features, without any training for place recognition, work across urban, indoor, aerial and underwater environments \citep{keetha2023anyloc}. \citet{li2024crossview} kept DINOv2 frozen and trained only a small adapter for drone-to-satellite retrieval on University-1652, without any labeled image pairs. These works follow the same idea as this thesis, pretrained networks without fine-tuning, with a stronger network, and they are a natural next step for the retrieval stage (Chapter~\ref{chap:conclusions}).
+
 \section{Autoencoder-based localization (Fabris et al.)}
+\label{sec:bg-fabris}
+Finally, this section covers the work of Fabris et al.\ at the University of Udine \citep{fabris_tba}. Its significance is that it is the starting point of this project, the baseline for the comparison of our system and the first relocalization method tested in this thesis (Chapter~\ref{chap:relocalization}). Its model was trained directly on the dataset used in this work.
+
+The aim of his thesis was an algorithm that determines the position of a drone by comparing the images of its downward-facing camera with reference images of the area. The autoencoder must perform geo-localization in real time, while the drone is in the air. The reference is an orthophoto of the Rizzi district in Udine, provided by Insiel, with a resolution of $8400 \times 9000$ pixels covering about 751{,}045~m$^2$. The drone photos were taken with a DJI Phantom~4 Pro. Since the orthophoto was taken with a different camera, its colors were first corrected offline to match a photo from the drone, so that the drone's computer does not have to do it in flight. The corrected orthophoto is then divided into overlapping patches with a sliding window. The final configuration uses patches of $512 \times 512$ pixels with a stride of 256 pixels, a 50\% overlap, which gives 1054 patches. The GPS coordinates of each patch center are stored in a dictionary.
+
+Not every patch is useful for localization. Areas without distinctive features, such as fields, forests or gravel, look alike and are easily confused. For that reason, Fabris trained a ResNet50 to classify patches as salient or non-salient on a manually labeled set, reaching 97.8\% test accuracy. He then removed the non-salient patches, which reduced the dataset by about 30\%. To make the images more robust to the differences between the two cameras, three additional channels are added to each image: the edges found by the Sobel and Canny detectors and the corners found by the Harris detector. The input of the network therefore has six channels.
+
+The core of the system is the compression of each image into a short vector, so that the drone only has to compare vectors instead of full images. Three methods were compared on a test set of 42 drone photos: principal component analysis (PCA) found the correct patch for 17 of them, the best Vision Transformer for 21 and an autoencoder for 28. An autoencoder is a network made of an encoder, which compresses the image into a vector, and a decoder, which tries to rebuild the image from that vector. Training it to rebuild the images forces the encoder to keep their essential information. At inference only the encoder is used. Attempts to improve the architecture included attention layers, residual blocks, batch normalization, depth-wise convolutions, and replacing the loss function with SSIM, L1 or a triplet loss. However, none of them beat the results of the original design. The final encoder has four convolutional layers and produces a vector of 2048 numbers. The patches are compared with cosine similarity, which performed best among the tested measures. With this configuration, the system found the correct patch for 30 of the 42 test photos (71.4\%), and for 37 of them the correct patch was among the five most similar (88.1\%).
+
+In flight, the system does not search the whole map for every image. It starts from the last known GPS position and then compares each new image only with the patches within two strides of the previous match, a $5 \times 5$ neighborhood. It returns to a search over the whole map only when the similarity falls below a threshold of 0.35. Fabris also linked the stride, the size of this neighborhood, the speed of the drone and the time between images: at 25~km/h, for example, one image has to be taken about every 4~s. On three real paths of 12, 9 and 17 images, the system identified every position correctly. A naive baseline that compares the raw images found only between 33\% and 71\% of them and needed about 6.6~GB of memory, against about 1.08~GB for the proposed system, most of which is the encoder itself.
+
+The system relies on several assumptions, which Fabris defined at the beginning of his thesis. The starting position is known from GPS, the camera always faces north, and the drone flies at a fixed altitude, about 57~m according to his calculation from the patch size and the field of view of the camera. The drone is also assumed to move at constant speed and only along the axes of the patch grid, since a diagonal move ends between patch centers, where no patch matches. He also names areas without distinctive features and poor lighting as limitations. The system was tested only on a workstation, and testing on the drone's on-board computer, lower numerical precision, rotated images and several altitudes are named as future work. These assumptions are the starting point of Chapter~\ref{chap:relocalization}, where his model is tested inside our pipeline.
 
 \chapter{Data and experimental setup}
 \label{chap:data}
@@ -992,6 +1018,11 @@ The important takeaway here is that the EKF is useful both with and without the 
 \phantomsection
 \begin{thebibliography}{99}
 
+\bibitem[Amer et~al.(2017)]{amer2017urban}
+Amer, K., Samy, M., ElHakim, R., Shaker, M., \& ElHelw, M. (2017).
+Convolutional neural network-based deep urban signatures with application to drone localization.
+In \textit{Proceedings of the IEEE International Conference on Computer Vision Workshops} (pp.~2138--2145). \url{https://openaccess.thecvf.com/content_ICCV_2017_workshops/w30/html/Amer_Convolutional_Neural_Network-Based_ICCV_2017_paper.html}
+
 \bibitem[Arandjelovi{\'c} et~al.(2016)]{arandjelovic2016netvlad}
 Arandjelovi{\'c}, R., Gronat, P., Torii, A., Pajdla, T., \& Sivic, J. (2016).
 NetVLAD: CNN architecture for weakly supervised place recognition.
@@ -1012,6 +1043,11 @@ Buslaev, A., Iglovikov, V.~I., Khvedchenya, E., Parinov, A., Druzhinin, M., \& K
 Albumentations: Fast and flexible image augmentations.
 \textit{Information}, \textit{11}(2), 125. \url{https://doi.org/10.3390/info11020125}
 
+\bibitem[Cabrera-Ponce \& Martinez-Carranza(2022)]{cabrera2022geoloc}
+Cabrera-Ponce, A.~A., \& Martinez-Carranza, J. (2022).
+Convolutional neural networks for geo-localisation with a single aerial image.
+\textit{Journal of Real-Time Image Processing}, \textit{19}, 565--575. \url{https://doi.org/10.1007/s11554-022-01207-1}
+
 \bibitem[Deng et~al.(2009)]{deng2009imagenet}
 Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., \& Fei-Fei, L. (2009).
 ImageNet: A large-scale hierarchical image database.
@@ -1026,6 +1062,17 @@ In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Rec
 DJI. (2016).
 \textit{Phantom 4 user manual}.
 SZ DJI Technology Co., Ltd.
+
+\bibitem[Durgam et~al.(2024)]{durgam2024crossview}
+Durgam, A., Paheding, S., Dhiman, V., \& Devabhaktuni, V. (2024).
+Cross-view geo-localization: A survey.
+\textit{IEEE Access}, \textit{12}. \url{https://doi.org/10.1109/ACCESS.2024.3507280}
+
+% TODO: complete this reference (Fabris's thesis: full name, title, degree, university, year)
+\bibitem[Fabris(n.d.)]{fabris_tba}
+Fabris. (n.d.).
+\textit{[Thesis on autoencoder-based drone localization: full reference to be added]}.
+University of Udine.
 
 \bibitem[Fischler \& Bolles(1981)]{fischler1981ransac}
 Fischler, M.~A., \& Bolles, R.~C. (1981).
@@ -1046,6 +1093,16 @@ InvenSense Inc.
 Kalman, R.~E. (1960).
 A new approach to linear filtering and prediction problems.
 \textit{Journal of Basic Engineering}, \textit{82}(1), 35--45. \url{https://doi.org/10.1115/1.3662552}
+
+\bibitem[Keetha et~al.(2023)]{keetha2023anyloc}
+Keetha, N., Mishra, A., Karhade, J., Jatavallabhula, K.~M., Scherer, S., Krishna, M., \& Garg, S. (2023).
+AnyLoc: Towards universal visual place recognition.
+arXiv. \url{https://arxiv.org/abs/2308.00688}
+
+\bibitem[Li et~al.(2024)]{li2024crossview}
+Li, H., Xu, C., Yang, W., Yu, H., \& Xia, G.-S. (2024).
+Learning cross-view visual geo-localization without ground truth.
+arXiv. \url{https://arxiv.org/abs/2403.12702}
 
 \bibitem[M.~Lin et~al.(2014)]{lin2014nin}
 Lin, M., Chen, Q., \& Yan, S. (2014).
@@ -1072,10 +1129,25 @@ Lowe, D.~G. (2004).
 Distinctive image features from scale-invariant keypoints.
 \textit{International Journal of Computer Vision}, \textit{60}(2), 91--110. \url{https://doi.org/10.1023/B:VISI.0000029664.99615.94}
 
+\bibitem[Masone \& Caputo(2021)]{masone2021vpr}
+Masone, C., \& Caputo, B. (2021).
+A survey on deep visual place recognition.
+\textit{IEEE Access}, \textit{9}, 19516--19547. \url{https://doi.org/10.1109/ACCESS.2021.3054937}
+
+\bibitem[Nassar et~al.(2018)]{nassar2018registration}
+Nassar, A., Amer, K., ElHakim, R., \& ElHelw, M. (2018).
+A deep CNN-based framework for enhanced aerial imagery registration with applications to UAV geolocalization.
+In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops} (pp.~1513--1523). \url{https://openaccess.thecvf.com/content_cvpr_2018_workshops/w30/html/Nassar_A_Deep_CNN-Based_CVPR_2018_paper.html}
+
 \bibitem[Nist{\'e}r et~al.(2004)]{nister2004vo}
 Nist{\'e}r, D., Naroditsky, O., \& Bergen, J. (2004).
 Visual odometry.
 In \textit{Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition} (Vol.~1, pp.~I-652--I-659). \url{https://doi.org/10.1109/CVPR.2004.1315094}
+
+\bibitem[Oquab et~al.(2023)]{oquab2023dinov2}
+Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Assran, M., Ballas, N., Galuba, W., Howes, R., Huang, P.-Y., Li, S.-W., Misra, I., Rabbat, M., Sharma, V., \ldots\ Bojanowski, P. (2023).
+DINOv2: Learning robust visual features without supervision.
+arXiv. \url{https://arxiv.org/abs/2304.07193}
 
 \bibitem[Qin et~al.(2018)]{qin2018vinsmono}
 Qin, T., Li, P., \& Shen, S. (2018).
@@ -1124,10 +1196,22 @@ Tan, M., \& Le, Q.~V. (2019).
 EfficientNet: Rethinking model scaling for convolutional neural networks.
 In \textit{Proceedings of the 36th International Conference on Machine Learning} (pp.~6105--6114). PMLR.
 
+% TODO: complete this reference (authors, title, journal, volume, pages)
+\bibitem[Tang et~al.(2025)]{tang2025_tba}
+Tang et al. (2025).
+\textit{[Aerial image localization with a city map, visual odometry and GNSS: full reference to be added]}.
+\textit{ISPRS Journal of Photogrammetry and Remote Sensing}. \url{https://www.sciencedirect.com/science/article/pii/S0924271625003144}
+
 \bibitem[TorchVision maintainers and contributors(2016)]{torchvision2016}
 TorchVision maintainers and contributors. (2016).
 \textit{TorchVision: PyTorch's computer vision library} [Computer software].
 GitHub. \url{https://github.com/pytorch/vision}
+
+% TODO: complete this reference (authors, full title, volume, issue, pages)
+\bibitem[Walczak et~al.(2025)]{walczak2025_tba}
+Walczak et al. (2025).
+\textit{Fusion of optical flow and dead reckoning [full title and reference to be added]}.
+\textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}. \url{https://www.transnav.eu/Article_Fusion_of_Optical_Flow_and_Dead_Walczak,76,1592.html}
 
 \bibitem[Wang et~al.(2024)]{wang2024efficientloftr}
 Wang, Y., He, X., Peng, S., Tan, D., \& Zhou, X. (2024).
@@ -1153,6 +1237,17 @@ In \textit{Proceedings of the 28th ACM International Conference on Multimedia} (
 Zhou, B., Lapedriza, A., Khosla, A., Oliva, A., \& Torralba, A. (2018).
 Places: A 10 million image database for scene recognition.
 \textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, \textit{40}(6), 1452--1464. \url{https://doi.org/10.1109/TPAMI.2017.2723009}
+
+% TODO: complete these two references (authors, year, venue, pages)
+\bibitem[{[Authors to be added]}(2024)]{deepmatch2024_tba}
+[Authors to be added]. (2024).
+Analysis of deep feature matching algorithms in UAV visual localization.
+IEEE. \url{https://ieeexplore.ieee.org/document/10694214}
+
+\bibitem[{[Authors to be added]}(n.d.)]{seqmatch_tba}
+[Authors to be added]. (n.d.).
+\textit{[Sequence matching of satellite patches along the trajectory: full reference to be added]}.
+IEEE. \url{https://ieeexplore.ieee.org/abstract/document/10415460}
 
 \end{thebibliography}
 
