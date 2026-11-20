@@ -170,7 +170,7 @@ In the visual odometry used in this thesis, the camera looks straight down at gr
 \label{sec:bg-ekf}
 In this section we cover the extended Kalman filter (EKF), which is used in the third stage of our pipeline (Chapter~\ref{chap:ekf}) to combine the measurements of the previous stages into a single estimate of the drone's position.
 
-The pipeline produces three kinds of measurements: the movement measured by visual odometry, the position given by a map check and the position found by relocalization. They differ in how much they can be trusted, and each of them has gaps that the others can cover. Combining measurements of different reliability into one estimate is called sensor fusion, and filtering is one of its main approaches \citep{liu_sensorfusion}.
+The pipeline produces three kinds of measurements: the movement measured by visual odometry, the position given by a map check and the position found by relocalization. They differ in how much they can be trusted, and each of them has gaps that the others can cover. Combining measurements of different reliability into one estimate is called sensor fusion, and filtering is one of its main approaches \citep{liu2025survey}.
 
 The Kalman filter \citep{kalman1960} keeps an estimate of the drone's position and velocity together with its uncertainty. In the prediction step, it moves the state forward in time with a model of the motion and increases the uncertainty. In the update step, it corrects the state with a new measurement, and the size of the correction depends on how certain the prediction and the measurement are: a precise map check moves the estimate a lot, while a noisy odometry step moves it only a little. The extended Kalman filter does the same for motion and measurements that are not linear, such as a drone that turns.
 
@@ -182,11 +182,11 @@ Due to the volume of research in recent years directed towards the development o
 
 Finding where an image was taken by comparing it with a database of known places is studied in the field of visual place recognition. Over the last decade, the image descriptions used for this task have shifted from hand-crafted features to features learned by neural networks \citep{masone2021vpr}. When the query and the reference are seen from different viewpoints, such as a drone image and a satellite map, the task is called cross-view geo-localization. Its methods, datasets and open challenges are reviewed by \citet{durgam2024crossview}. The first benchmark for drones is University-1652, which contains images of 1652 university buildings seen from synthetic drones, satellites and ground cameras, and defines two tasks: locating a place from drone images and guiding a drone to a place shown in a satellite image \citep{zheng2020university}. The authors also analyze a variety of standard CNN features on it, the same kind of pretrained features used by the retrievers in this thesis.
 
-Some of the earliest work used CNNs to recognize the district a drone is flying over from the look of its buildings \citep{amer2017urban}. \citet{nassar2018registration} went further by registering each camera frame against an image generated from the satellite map at the drone's estimated position and by refining the result with matched semantic shapes, an idea close to the map check of our pipeline. Cabrera-Ponce and Martinez-Carranza \citeyearpar{cabrera2022geoloc} instead trained a compact CNN to estimate the drone's position directly from a single image, with average errors of 2.8 to 6.1~m at more than 100 frames per second. Another approach sorts the satellite patches along the drone's trajectory, so that each frame only has to be matched against a short sequence of patches rather than the whole map \citep{seqmatch_tba}.
+Some of the earliest work used CNNs to recognize the district a drone is flying over from the look of its buildings \citep{amer2017urban}. \citet{nassar2018registration} went further by registering each camera frame against an image generated from the satellite map at the drone's estimated position and by refining the result with matched semantic shapes, an idea close to the map check of our pipeline. Cabrera-Ponce and Martinez-Carranza \citeyearpar{cabrera2022geoloc} instead trained a compact CNN to estimate the drone's position directly from a single image, with average errors of 2.8 to 6.1~m at more than 100 frames per second. Another approach sorts the satellite patches along the drone's trajectory, so that each frame only has to be matched against a short sequence of patches rather than the whole map \citep{wang2024seqmatch}.
 
-The work closest to ours in its matching is \textit{Analysis of Deep Feature Matching Algorithms in UAV Visual Localization} \citep{deepmatch2024_tba}. It localizes a UAV in three degrees of freedom with pretrained SuperPoint and LightGlue, used without fine-tuning both for the short-term motion between frames and for matching frames against the map. It also shows that the two networks can refine the estimate of a less accurate localization method. Evaluated on an NVIDIA Jetson Orin Nano, it reached acceptable performance for real-time localization, using the same matcher and the same on-board computer as this thesis.
+The work closest to ours in its matching is \textit{Analysis of Deep Feature Matching Algorithms in UAV Visual Localization} \citep{prutyanov2024deepmatch}. It localizes a UAV in three degrees of freedom with pretrained SuperPoint and LightGlue, used without fine-tuning both for the short-term motion between frames and for matching frames against the map. It also shows that the two networks can refine the estimate of a less accurate localization method. Evaluated on an NVIDIA Jetson Orin Nano, it reached acceptable performance for real-time localization, using the same matcher and the same on-board computer as this thesis.
 
-Other recent systems combine several of these components. \citet{walczak2025_tba} estimate the drone's motion from the optical flow of a downward-facing camera and its heading from the IMU, reaching average errors of about 11 to 60~m on real flights, since without a map nothing removes the drift. \citet{tang2025_tba} match aerial images against a two-dimensional city map with a Vision Transformer and fuse the result with visual odometry and GNSS in a particle filter, which localized aerial images in real time over more than 1000~km$^2$ of four cities. Its structure, with retrieval against a map, odometry in between and a filter combining the two, is the closest to the pipeline of this thesis.
+Other recent systems combine several of these components. \citet{walczak2025_tba} estimate the drone's motion from the optical flow of a downward-facing camera and its heading from the IMU, reaching average errors of about 11 to 60~m on real flights, since without a map nothing removes the drift. \citet{tang2025citylevel} match aerial images against a two-dimensional city map with a Vision Transformer and fuse the result with visual odometry and GNSS in a particle filter, which localized aerial images in real time over more than 1000~km$^2$ of four cities. Its structure, with retrieval against a map, odometry in between and a filter combining the two, is the closest to the pipeline of this thesis.
 
 The newest direction is foundation models: networks trained on very large image collections whose features work for many tasks without fine-tuning. DINOv2 is the best-known example \citep{oquab2023dinov2}, and AnyLoc showed that its features, without any training for place recognition, work across urban, indoor, aerial and underwater environments \citep{keetha2023anyloc}. \citet{li2024crossview} kept DINOv2 frozen and trained only a small adapter for drone-to-satellite retrieval on University-1652, without any labeled image pairs. These works follow the same idea as this thesis, pretrained networks without fine-tuning, with a stronger network, and they are a natural next step for the retrieval stage (Chapter~\ref{chap:conclusions}).
 
@@ -1119,10 +1119,10 @@ Lindenberger, P., Sarlin, P.-E., \& Pollefeys, M. (2023).
 LightGlue: Local feature matching at light speed.
 In \textit{Proceedings of the IEEE/CVF International Conference on Computer Vision} (pp.~17627--17638). \url{https://arxiv.org/abs/2306.13643}
 
-% TODO: complete this reference (which Liu et al. paper on sensor fusion is meant: authors, year, title, venue, DOI)
-\bibitem[Liu et~al.(n.d.)]{liu_sensorfusion}
-Liu et al. (n.d.).
-\textit{[Sensor fusion survey: full reference to be added]}.
+\bibitem[Liu et~al.(2025)]{liu2025survey}
+Liu, H., Long, Q., Yi, B., \& Jiang, W. (2025).
+A survey of sensors based autonomous unmanned aerial vehicle (UAV) localization techniques.
+\textit{Complex \& Intelligent Systems}, \textit{11}(8), Article 371. \url{https://doi.org/10.1007/s40747-025-01961-2}
 
 \bibitem[Lowe(2004)]{lowe2004sift}
 Lowe, D.~G. (2004).
@@ -1148,6 +1148,11 @@ In \textit{Proceedings of the IEEE Computer Society Conference on Computer Visio
 Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Assran, M., Ballas, N., Galuba, W., Howes, R., Huang, P.-Y., Li, S.-W., Misra, I., Rabbat, M., Sharma, V., \ldots\ Bojanowski, P. (2023).
 DINOv2: Learning robust visual features without supervision.
 arXiv. \url{https://arxiv.org/abs/2304.07193}
+
+\bibitem[Prutyanov et~al.(2024)]{prutyanov2024deepmatch}
+Prutyanov, V.~V., Ternov, M.~A., \& Kostrov, D.~S. (2024).
+Analysis of deep feature matching algorithms in UAV visual localization.
+In \textit{2024 International Russian Automation Conference (RusAutoCon)} (pp.~565--570). IEEE. \url{https://doi.org/10.1109/RusAutoCon61949.2024.10694214}
 
 \bibitem[Qin et~al.(2018)]{qin2018vinsmono}
 Qin, T., Li, P., \& Shen, S. (2018).
@@ -1196,11 +1201,10 @@ Tan, M., \& Le, Q.~V. (2019).
 EfficientNet: Rethinking model scaling for convolutional neural networks.
 In \textit{Proceedings of the 36th International Conference on Machine Learning} (pp.~6105--6114). PMLR.
 
-% TODO: complete this reference (authors, title, journal, volume, pages)
-\bibitem[Tang et~al.(2025)]{tang2025_tba}
-Tang et al. (2025).
-\textit{[Aerial image localization with a city map, visual odometry and GNSS: full reference to be added]}.
-\textit{ISPRS Journal of Photogrammetry and Remote Sensing}. \url{https://www.sciencedirect.com/science/article/pii/S0924271625003144}
+\bibitem[Tang et~al.(2025)]{tang2025citylevel}
+Tang, Y., Zhang, J., Gong, J., Li, Y., \& Yang, B. (2025).
+City-level aerial geo-localization based on map matching network.
+\textit{ISPRS Journal of Photogrammetry and Remote Sensing}, \textit{229}, 65--77. \url{https://doi.org/10.1016/j.isprsjprs.2025.08.002}
 
 \bibitem[TorchVision maintainers and contributors(2016)]{torchvision2016}
 TorchVision maintainers and contributors. (2016).
@@ -1213,10 +1217,16 @@ Walczak et al. (2025).
 \textit{Fusion of optical flow and dead reckoning [full title and reference to be added]}.
 \textit{TransNav, the International Journal on Marine Navigation and Safety of Sea Transportation}. \url{https://www.transnav.eu/Article_Fusion_of_Optical_Flow_and_Dead_Walczak,76,1592.html}
 
-\bibitem[Wang et~al.(2024)]{wang2024efficientloftr}
+\bibitem[Y.~Wang et~al.(2024)]{wang2024efficientloftr}
 Wang, Y., He, X., Peng, S., Tan, D., \& Zhou, X. (2024).
 Efficient LoFTR: Semi-dense local feature matching with sparse-like speed.
 In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition} (pp.~21666--21675). \url{https://arxiv.org/abs/2403.04765}
+
+% TODO: IEEE lists only "Z. Wang et al."; APA needs the full author list (up to 20 names)
+\bibitem[Z.~Wang et~al.(2024)]{wang2024seqmatch}
+Wang, Z., et~al. (2024).
+Sequence matching for image-based UAV-to-satellite geolocalization.
+\textit{IEEE Transactions on Geoscience and Remote Sensing}, \textit{62}, Article 5607815. \url{https://doi.org/10.1109/TGRS.2024.3359605}
 
 \bibitem[Wolf et~al.(2020)]{wolf2020transformers}
 Wolf, T., Debut, L., Sanh, V., Chaumond, J., Delangue, C., Moi, A., Cistac, P., Rault, T., Louf, R., Funtowicz, M., Davison, J., Shleifer, S., von Platen, P., Ma, C., Jernite, Y., Plu, J., Xu, C., Le Scao, T., Gugger, S., \ldots\ Rush, A.~M. (2020).
@@ -1237,17 +1247,6 @@ In \textit{Proceedings of the 28th ACM International Conference on Multimedia} (
 Zhou, B., Lapedriza, A., Khosla, A., Oliva, A., \& Torralba, A. (2018).
 Places: A 10 million image database for scene recognition.
 \textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, \textit{40}(6), 1452--1464. \url{https://doi.org/10.1109/TPAMI.2017.2723009}
-
-% TODO: complete these two references (authors, year, venue, pages)
-\bibitem[{[Authors to be added]}(2024)]{deepmatch2024_tba}
-[Authors to be added]. (2024).
-Analysis of deep feature matching algorithms in UAV visual localization.
-IEEE. \url{https://ieeexplore.ieee.org/document/10694214}
-
-\bibitem[{[Authors to be added]}(n.d.)]{seqmatch_tba}
-[Authors to be added]. (n.d.).
-\textit{[Sequence matching of satellite patches along the trajectory: full reference to be added]}.
-IEEE. \url{https://ieeexplore.ieee.org/abstract/document/10415460}
 
 \end{thebibliography}
 
