@@ -192,7 +192,7 @@ The newest direction is foundation models: networks trained on very large image 
 
 \section{Autoencoder-based localization (Fabris et al.)}
 \label{sec:bg-fabris}
-Finally, this section covers the work of Fabris et al.\ at the University of Udine \citep{fabris_tba}. Its significance is that it is the starting point of this project, the baseline for the comparison of our system and the first relocalization method tested in this thesis (Chapter~\ref{chap:relocalization}). Its model was trained directly on the dataset used in this work.
+Finally, this section covers the work of Fabris et al.\ at the University of Udine \citep{fabris2025thesis}. Its significance is that it is the starting point of this project, the baseline for the comparison of our system and the first relocalization method tested in this thesis (Chapter~\ref{chap:relocalization}). Its model was trained directly on the dataset used in this work.
 
 The aim of his thesis was an algorithm that determines the position of a drone by comparing the images of its downward-facing camera with reference images of the area. The autoencoder must perform geo-localization in real time, while the drone is in the air. The reference is an orthophoto of the Rizzi district in Udine, provided by Insiel, with a resolution of $8400 \times 9000$ pixels covering about 751{,}045~m$^2$. The drone photos were taken with a DJI Phantom~4 Pro. Since the orthophoto was taken with a different camera, its colors were first corrected offline to match a photo from the drone, so that the drone's computer does not have to do it in flight. The corrected orthophoto is then divided into overlapping patches with a sliding window. The final configuration uses patches of $512 \times 512$ pixels with a stride of 256 pixels, a 50\% overlap, which gives 1054 patches. The GPS coordinates of each patch center are stored in a dictionary.
 
@@ -1068,10 +1068,10 @@ Durgam, A., Paheding, S., Dhiman, V., \& Devabhaktuni, V. (2024).
 Cross-view geo-localization: A survey.
 \textit{IEEE Access}, \textit{12}. \url{https://doi.org/10.1109/ACCESS.2024.3507280}
 
-% TODO: complete this reference (Fabris's thesis: full name, title, degree, university, year)
-\bibitem[Fabris(n.d.)]{fabris_tba}
-Fabris. (n.d.).
-\textit{[Thesis on autoencoder-based drone localization: full reference to be added]}.
+% TODO: add Fabris's first-name initial(s) after "Fabris,"
+\bibitem[Fabris(2025)]{fabris2025thesis}
+Fabris. (2025).
+\textit{Real-time localization algorithm for GPS-denied drone navigation} [Unpublished master's thesis].
 University of Udine.
 
 \bibitem[Fischler \& Bolles(1981)]{fischler1981ransac}
