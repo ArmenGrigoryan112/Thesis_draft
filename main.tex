@@ -48,6 +48,7 @@
 \usepackage[round,authoryear]{natbib}% APA-style author-year citations
 \setlength{\bibhang}{1.27cm}% APA hanging indent
 \renewcommand{\bibfont}{\raggedright}% APA reference list: left-aligned
+\setlength{\emergencystretch}{1.5em}% avoid overfull lines with long words
 \usepackage{hyperref}
 \hypersetup{
 			hyperfootnotes=true,			
@@ -999,14 +1000,293 @@ The important takeaway here is that the EKF is useful both with and without the 
 
 \chapter{Evaluation on real flights}
 \label{chap:evaluation}
-\section{Frozen configuration and protocol}
-\section{Inference on actual flight footages}
+Up until this point all of the tests and evaluations of the pipeline were performed on the same dataset, in which the real photos come from the same flight as the orthophoto: the camera and the map show the ground on the same day, in the same light and in the same season. This gives the pipeline an advantage when performing geo-localization, even with the augmentations applied to the data. The new dataset provided by Denis Tavaris from the University of Udine removes that advantage. The data was recorded on 28 October 2026 with a different drone, in a different season (autumn instead of spring) and about three and a half years after the flight of the first dataset (18 May 2023). Thus, even though the area of the flights is approximately the same, the pipeline is tested under the condition that matters most when evaluating how much it has overfitted to the first dataset: footage it has never seen before, including actual flight videos instead of simulated flights.
+
+\section{Dataset and protocol}
+\label{sec:real-protocol}
+The given dataset holds two flights, named after the color of their path in the ground-truth files: orange and blue (Table~\ref{tab:real-flights}). Each of those flights has both still photos and one video. Both lie on tile 06611109, the same tile used in Chapters~\ref{chap:relocalization} and~\ref{chap:ekf}, so the same map and patch databases are used. A photo is $4000 \times 3000$~px with a focal length of 4.49~mm (24~mm in 35~mm equivalent), and the videos are $1920 \times 1080$~px at 29.97 frames per second. The drone stopped to take each photo and photographed most positions two or more times, so the photos are not a continuous flight. In Table~\ref{tab:real-flights}, photos taken within 5~m of each other count as one position.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The two flights of the new dataset}
+  \label{tab:real-flights}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+     & Orange & Blue \\
+    \midrule
+    Role in the protocol & setup flight & held-out flight \\
+    Photos & 24 & 25 \\
+    Distinct positions & 9 & 13 \\
+    Height above take-off & 59.9~m & 60.8~m \\
+    Video & DJI\_0118 (114~s) & DJI\_0144 (91~s) \\
+    Ground-truth path & 407~m & 287~m \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Since there were no IMU logs available from the flights, we ran the EKF without IMU data. The photos carry their GPS position as metadata, while the videos carry a subtitle track written once per second, with the GPS position rounded to four decimals (about 10~m), the distance from the home point, the height, the horizontal speed and a UTC time, as well as the attitude of the drone at the moment recording started. The stored heading of the drone is $-7.4^\circ$ for orange and $+6.4^\circ$ for blue, with the camera pointing straight down ($-89.9^\circ$). The ground truth is one KML path per flight, without timestamps, together with the home point. Thus, the reference position of a video frame had to be constructed: the time of the video is aligned with the distance along the KML path, by choosing for every second the point of the path at which the distance from home, the speed and the coarse GPS position of the subtitle agree best. A reference built this way is accurate across the path but uncertain by about $\pm 2$~m along it. For that reason the cross-track error, the distance of the estimate from the path, is reported next to the full error for every video flight.
+
+The preparation of the data follows approximately the same pre-processing steps used for the first dataset (Section~\ref{sec:dataset}): the images are resized to the map resolution of 0.1~m per pixel, the scale is calibrated once at the start, and the offset between GPS and the map is measured leave-one-out (1.33~m west and 4.40~m south on orange, 1.62~m west and 2.71~m south on blue). The video frames need one additional factor of 1.17, because they show a narrower field of view than a photo. One problem of the calibration has to be noted. The blue flight starts directly above a house, and the start image was most likely matched on its roof, which is closer to the camera than the ground and therefore appears larger. The later map checks show that, as a result, the blue photos were processed about 15\% too small. This was found only after the blue runs and was not corrected, so that the blue flight stays held-out, which makes its results probably conservative.
+
+The protocol used for the dataset was to set up the configuration on the orange flight and to run the blue flight once with it, as a held-out flight. Only what the new drone forces was set on orange: reading the heading and the focal length from the metadata, the video factor of 1.17, the number of start frames tried for the calibration, one video frame every 3~s as the main sequence, and padding the query with black rows when an image is lower than the 512~px patch. All other settings are the same as in Chapters~\ref{chap:vo} to~\ref{chap:ekf}. Four small departures from this protocol occurred:
+\begin{itemize}
+\item the blue flight was run before the orange results had been reviewed,
+\item a first blue run stopped during the video stage and was repeated with the same settings,
+\item the retriever comparison on blue was run again after the padding of the query was added,
+\item both videos were run a second time with the start heading read from the video metadata, which on blue equals the heading measured in the first run.
+\end{itemize}
+No threshold or noise value was changed at any point.
+
+The dataset was tested in three different cases:
+\begin{enumerate}
+\item Every image was treated separately, with a map check from 15~m off and then a search over the whole map. The same process was repeated for all three retrievers on both grids for the photos.
+\item The photos and the video (one frame every 3~s, and also every 1, 6 and 10~s) of the new flights were flown through the whole pipeline, both with the rules and with the EKF (without IMU).
+\item The video with one frame every 3~s was tested under an unknown start 254~m away and under a 15~s camera blackout at 40\% of the flight.
+\end{enumerate}
+
+\section{Results on single images}
+\label{sec:real-single}
+A correct fix is a verified position within 5~m of the reference, a false fix is one further away. Table~\ref{tab:real-single} gives the results with EfficientNet-B0 on the dense grid.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Every image of the new flights treated alone}
+  \label{tab:real-single}
+  \footnotesize\setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{lrrrrrrr}
+    \toprule
+     & & \multicolumn{2}{c}{Map check} & \multicolumn{4}{c}{Search from scratch} \\
+    \cmidrule(lr){3-4}\cmidrule(lr){5-8}
+     & & & Median & & & & Median \\
+    Set & Images & Accepted & error (m) & R@5 & Correct & False & error (m) \\
+    \midrule
+    Orange photos, all & 24 & 15 & 0.53 & 0.88 & 15 & 0 & 0.50 \\
+    Orange photos, one per position & 9 & 5 & 0.51 & 0.89 & 5 & 0 & 0.50 \\
+    Orange video frames & 38 & 21 & 2.42 & 0.55 & 19 & 0 & 2.42 \\
+    \addlinespace
+    Blue photos, all & 25 & 23 & 0.48 & 0.60 & 22 & 0 & 0.34 \\
+    Blue photos, one per position & 13 & 12 & 0.56 & 0.62 & 11 & 0 & 0.20 \\
+    Blue video frames & 30 & 20 & 1.28 & 0.43 & 12 & 0 & 0.71 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On the held-out blue flight the map check accepts 23 of the 25 photos at a median error of 0.48~m, and the search from scratch gives 22 correct fixes and no false fix. This is in the same range as on the photos of the first dataset (51 of 58 photos accepted by the map check at a median of 1.2~m, and 47 of 58 found from scratch), on imagery taken three and a half years after the map.
+
+Within those 49 photos, the places that cannot be matched fall into two groups: vegetation (the canal, tree canopy and water, in autumn colors and with long morning shadows, where the map shows the same trees smaller and dark green) and a large roof that is now covered with solar panels, while it is nearly bare in the map. This means that the system has a hard time localizing itself wherever the ground no longer looks like the map, whether because of the season or because the ground itself has changed. On the orange flight this affected 9 of the 24 photos, all of them in its second photo session. On the blue flight it was only one position (two photos). Video frames are harder alone than photos: on blue the map check accepts 20 of 30 frames, but the search finds 12, with a Recall@5 of 0.43. A probable cause, which was not tested separately, is the size of the frame: after calibration a video frame is only 361~px high, so about 30\% of the 512~px query is black padding.
+
+The comparison of the three retrievers (Chapter~\ref{chap:relocalization}) was repeated on the new photos, each searched from scratch. Table~\ref{tab:real-retrievers} gives the correct fixes out of the 24 orange and 25 blue photos and, in brackets, out of the 9 and 13 distinct positions. No retriever produced a false fix in 294 searches.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The three retrievers on the new photos}
+  \label{tab:real-retrievers}
+  \small
+  \begin{tabular}{llrrrr}
+    \toprule
+     & & \multicolumn{2}{c}{Orange} & \multicolumn{2}{c}{Blue} \\
+    \cmidrule(lr){3-4}\cmidrule(lr){5-6}
+    Retriever & Grid & Correct & R@5 & Correct & R@5 \\
+    \midrule
+    Autoencoder & 25.6~m & 6 (3) & 0.46 & 1 (1) & 0.00 \\
+     & 6.4~m & 15 (5) & 0.88 & 14 (7) & 0.56 \\
+    \addlinespace
+    ResNet50 & 25.6~m & 13 (5) & 0.67 & 17 (9) & 0.48 \\
+     & 6.4~m & 15 (5) & 0.63 & 16 (9) & 0.40 \\
+    \addlinespace
+    EfficientNet-B0 & 25.6~m & 11 (4) & 0.54 & 21 (11) & 0.48 \\
+     & 6.4~m & 15 (5) & 0.88 & 22 (11) & 0.60 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The comparison on the new dataset confirms the ranking of Chapter~\ref{chap:relocalization}: EfficientNet-B0 gives the most correct fixes on both grids, while the autoencoder gives the fewest and nearly fails on the coarse grid (1 of 25 blue photos). The CNNs again do not need the dense grid: EfficientNet-B0 loses one photo when moving to the coarse grid, the autoencoder 13. The sample is small, however. On the orange flight all three retrievers find 15 of the 24 photos on the dense grid (not the same 15), and the 25 blue photos correspond to only 13 places, so the gap between ResNet50 and EfficientNet-B0 is only two places. What the data supports is that EfficientNet-B0 was equal or better on every dataset, not that it is proven more accurate than ResNet50.
+
+\section{Results as flights}
+\label{sec:real-flights}
+In the same way as the simulated flights of the first dataset, the photos and the videos of the new flights were flown through the whole pipeline, with the rules and with the EKF. Errors are measured against the reference of each image, and the cross-track error, reported as a median, is the distance from the ground-truth path. No flight accepted a false fix. Table~\ref{tab:real-blue} gives the held-out blue flight and Table~\ref{tab:real-orange} the orange setup flight.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The held-out blue flight}
+  \label{tab:real-blue}
+  \footnotesize\setlength{\tabcolsep}{2.4pt}
+  \begin{tabular}{llrrrrrrrr}
+    \toprule
+     & & & ATE & Max & Final & Within & Truth in & & Cross- \\
+    Flight & Mode & Frames & (m) & error (m) & error (m) & 5~m (\%) & radius (\%) & NEES & track (m) \\
+    \midrule
+    Photos & Rules & 25 & 1.46 & 5.97 & 1.48 & 96 & 96 & -- & -- \\
+     & EKF & 25 & 2.02 & 5.73 & 1.57 & 96 & 100 & 0.97 & -- \\
+    \addlinespace
+    Video, 1~s & Rules & 90 & 2.46 & 5.91 & 3.50 & 98 & 84 & -- & 0.44 \\
+     & EKF & 90 & 2.50 & 4.83 & 2.76 & 100 & 88 & 3.51 & 0.44 \\
+    \addlinespace
+    Video, 3~s & Rules & 30 & 3.09 & 5.19 & 4.25 & 93 & 80 & -- & 0.34 \\
+     & EKF & 30 & 3.14 & 4.71 & 3.59 & 100 & 93 & 3.29 & 0.56 \\
+    \addlinespace
+    Video, 6~s & Rules & 15 & 5.01 & 11.64 & 5.00 & 80 & 47 & -- & 0.40 \\
+     & EKF & 15 & 4.98 & 11.43 & 5.72 & 67 & 80 & 4.93 & 0.82 \\
+    \addlinespace
+    Video, 10~s & Rules & 9 & 7.98 & 12.31 & 6.45 & 44 & 22 & -- & 0.44 \\
+     & EKF & 9 & 18.63 & 28.18 & 27.86 & 22 & 33 & 15.98 & 8.13 \\
+    \addlinespace
+    Unknown start & Rules & 30 & 2.53 & 4.70 & 2.05 & 100 & 77 & -- & 0.36 \\
+     & EKF & 30 & 3.40 & 5.58 & 5.06 & 83 & 97 & 3.27 & 0.33 \\
+    \addlinespace
+    Blackout 15~s & Rules & 30 & 9.41 & 30.97 & 3.45 & 83 & 90 & -- & 0.63 \\
+     & EKF & 30 & 9.82 & 41.81 & 2.20 & 87 & 97 & 2.08 & 1.05 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The orange setup flight}
+  \label{tab:real-orange}
+  \footnotesize\setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{llrrrrrr}
+    \toprule
+     & & & ATE & Max & Final & Within & Truth in \\
+    Flight & Mode & Frames & (m) & error (m) & error (m) & 5~m (\%) & radius (\%) \\
+    \midrule
+    Photos, session 0 & Rules & 9 & 0.34 & 0.55 & 0.35 & 100 & 100 \\
+     & EKF & 9 & 0.42 & 0.57 & 0.57 & 100 & 100 \\
+    \addlinespace
+    Photos, session 1 & Rules & 15 & 3.59 & 6.47 & 6.47 & 93 & 87 \\
+     & EKF & 15 & 4.31 & 7.44 & 7.44 & 60 & 100 \\
+    \addlinespace
+    Video, 1~s & Rules & 113 & 2.69 & 4.32 & 1.20 & 100 & 74 \\
+     & EKF & 113 & 2.52 & 4.41 & 1.05 & 100 & 92 \\
+    \addlinespace
+    Video, 3~s & Rules & 38 & 2.84 & 4.49 & 0.90 & 100 & 79 \\
+     & EKF & 38 & 2.85 & 4.43 & 1.07 & 100 & 97 \\
+    \addlinespace
+    Video, 6~s & Rules & 19 & 4.16 & 7.33 & 1.28 & 79 & 68 \\
+     & EKF & 19 & 4.19 & 7.25 & 1.14 & 79 & 100 \\
+    \addlinespace
+    Video, 10~s & Rules & 12 & 35.54 & 81.53 & 2.61 & 67 & 67 \\
+     & EKF & 12 & 21.94 & 57.37 & 2.51 & 75 & 100 \\
+    \addlinespace
+    Unknown start & Rules & 38 & 201.00 & 254.09 & 1.04 & 34 & 84 \\
+     & EKF & 38 & 201.10 & 254.09 & 1.06 & 34 & 97 \\
+    \addlinespace
+    Blackout 15~s & Rules & 38 & 10.12 & 42.53 & 1.01 & 87 & 79 \\
+     & EKF & 38 & 15.93 & 69.88 & 1.00 & 87 & 97 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On blue, with one frame every 3~s, the 278~m video flight is followed with an ATE of 3.1~m in both modes (Figure~\ref{fig:real-blue-video}). Across the path the error is a median of 0.3--0.6~m and never above 3.6~m, so most of the full error lies along the path, where the reference itself is uncertain by about 2~m. The last map check, at frame 25, fails on ground that does not match the map, and the last nine frames run on odometry alone, ending about 4~m off. The 25 blue photos, whose reference is their own GPS position, give the cleanest numbers: an ATE of 1.5~m (rules) and 2.0~m (EKF), with 96\% of the photos within 5~m.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{images/real-blue-video-flight.jpg}
+  \caption{The held-out blue video flight, one frame every 3~s}
+  \label{fig:real-blue-video}
+\end{figure}
+
+The EKF behaves as in Chapter~\ref{chap:ekf}: without an IMU it is not more accurate, but its uncertainty is more reliable, containing the true position on 80--93\% of the frames at 1--6~s spacing, against 47--84\% for the rules, whose growth of 1~m per step is too small on real video. On the video, however, its NEES is 3.3--4.9 instead of about 2, with only 60--83\% of the frames inside the 95\% bound, so it is overconfident with the noise values chosen on the photos of the first dataset. Part of this comes from the along-path uncertainty of the reference, which the filter does not know about. On the blue photos the NEES is 0.97.
+
+Frame spacing shows how much overlap odometry needs. At 1~s and 3~s (90\% and 71\% overlap) the ATE is 2.5--3.1~m, at 6~s (40\%) it is 5.0~m, and at 10~s (19\%) it is 8.0~m with the rules and 18.6~m with the EKF, whose gate rejected the map check at frame 5. In an earlier run with the start heading measured from the map, the same map check was accepted and the ATE was 7.0~m. This case is decided by one measurement on nine frames, so the 10~s result is unstable rather than measured. Overall, the result supports the 80\% overlap chosen in simulation: accuracy degrades below about half overlap.
+
+In the hard scenarios, an unknown start 254~m away is relocalized on the first blue image (0.4~m off), while the orange flight has nothing to match for its first 24 frames, stays about 250~m off and is within 4.2~m after its first relocalization at frame 25. In the 15~s blackout (59--64~m flown blind) the error peaks at 31.0~m (rules) and 41.8~m (EKF) on blue (Figure~\ref{fig:real-blue-blackout}) and at 42.5~m and 69.9~m on orange, as the constant-velocity prediction of the EKF overshoots, and it is back to about 1~m on the first frame after the blackout. This is the real-data counterpart of the simulated blackout without IMU. The 3.9~m of Chapter~\ref{chap:ekf} has no counterpart here, because no inertial data exists for these flights.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{images/real-blue-blackout.jpg}
+  \caption{The blue video flight with a camera blackout of 15~s (frames 12--16)}
+  \label{fig:real-blue-blackout}
+\end{figure}
+
+The orange video starts over ground that rarely matches the map: only 5 of its first 18 frames pass the map check alone, against 16 of the last 20. Its start frame could therefore not be used for the calibration, and the flight runs with the nominal scale and the heading stored in the video. With these two values it is followed within 4.5~m at 3~s spacing. An earlier run that assumed a heading of $0^\circ$ instead drifted to 27.6~m, which is what a heading error of $7.4^\circ$ produces over about 215~m of flight. This shows how much the pipeline depends on the start heading when the start cannot be matched to the map.
+
 \section{Runtime on the Jetson Orin Nano}
 \label{sec:jetson-runtime}
-% TODO: describe how speed is measured on the Jetson Orin Nano, then the results
-\fbox{\parbox{0.9\textwidth}{\small\textbf{Placeholder.} How the speed is measured on the Jetson Orin Nano, and the results, are to be added here.}}
+The next logical step is to see whether the pipeline is capable of running in real time on hardware that could be attached to a drone. For that reason, the flights of the previous section were run, with unchanged code and settings, on a Jetson Orin Nano Super provided by Denis Tavaris from the University of Udine (8~GB of memory shared by the CPU and the GPU, MAXN SUPER power mode, JetPack 6.2.1, PyTorch 2.11 \citep{paszke2019pytorch}). The pipeline was run twice on the blue flight and once on the orange flight, and the three retrievers were then timed in a separate script. Each stage was timed 30 times after 3 warm-up runs, every frame was also timed during the flights, and the memory, power and temperature of the board were logged once per second. Reading the images from disk is not included. Table~\ref{tab:jetson-stages} and Figure~\ref{fig:jetson-stages} give the time of each stage, as the median of 30 runs on the second blue run. The other two runs agree within 1--2\%.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Time per stage on the Jetson Orin Nano Super}
+  \label{tab:jetson-stages}
+  \small
+  \begin{tabular}{lr}
+    \toprule
+    Stage & Median (ms) \\
+    \midrule
+    SuperPoint, one camera image & 83 \\
+    SuperPoint, one 1024~px map crop & 154 \\
+    LightGlue, two images & 65 \\
+    RANSAC motion estimate (CPU) & 0.4 \\
+    Odometry step & 246 \\
+    Map check & 362 \\
+    Fingerprint, EfficientNet-B0 & 27 \\
+    Search of the dense database (CPU) & 4.7 \\
+    Relocalization over the whole map, 5 candidates & 1700 \\
+    EKF, one image (CPU) & 0.32 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{images/jetson-stage-times.pdf}
+  \caption{Time per stage on the Jetson Orin Nano Super}
+  \label{fig:jetson-stages}
+\end{figure}
+
+SuperPoint and LightGlue make up about 94\% of an odometry step, and the fingerprint and the search together are under 2\% of a relocalization. LightGlue is the only stage whose time varies (39--95~ms), because it depends on the number of keypoints. Figure~\ref{fig:jetson-stages} shows the median and the range of the 30 runs of each stage. In flight a normal frame takes about 0.25~s (median per flight 248--325~ms), and the time of a frame depends on what happens in it (Table~\ref{tab:jetson-frames}).
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Time per frame in flight by what happened in the frame}
+  \label{tab:jetson-frames}
+  \small
+  \begin{tabular}{lrr}
+    \toprule
+     & Blue: median & Orange: median \\
+    What happened in the frame & ms (frames) & ms (frames) \\
+    \midrule
+    Odometry only & 270 (86) & 272 (96) \\
+    Odometry and an accepted map check & 630 (16) & 603 (12) \\
+    Odometry and a failed map check & 637 (5) & 2224 (8) \\
+    Relocalization & 2230--2445 (3) & 1967--2324 (4) \\
+    Lost (all three failed) & -- & 3885 (4) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+At one image every 3~s, every blue frame finishes before the next image arrives. On orange, 3 of 38 video frames take longer (up to 4.1~s), all of them frames in which the drone is lost and searches again. At one image per second, odometry and map-check frames would still fit, but a relocalization (about 2~s) would not.
+
+Table~\ref{tab:jetson-retrievers} gives the median time of one $512 \times 512$ query for each retriever (30 runs on the GPU, 10 on the CPU), its GPU memory and its size. The autoencoder and ResNet50 ran with random weights, which is valid for time and memory, since both depend on the shape of a network and not on its weights. EfficientNet-B0 is slow on the ARM CPU because of how PyTorch handles its depthwise convolutions. This does not affect the GPU.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{The three retrievers on the Jetson Orin Nano Super}
+  \label{tab:jetson-retrievers}
+  \footnotesize\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+     & GPU & CPU & GPU memory & Parameters & Fingerprint & Database \\
+    Retriever & (ms) & (ms) & (MB) & (M) & length & (MB) \\
+    \midrule
+    Autoencoder & 149.7 & 2215 & 1081 & 268.8 & 2048 & 128.8 \\
+    ResNet50 & 29.7 & 254 & 121 & 23.5 & 2048 & 128.8 \\
+    EfficientNet-B0 & 26.2 & 1767 & 35 & 4.0 & 1280 & 80.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+EfficientNet-B0 is the fastest network on the GPU, while the autoencoder needs 1.08~GB of GPU memory, thirty times more, which on a board with 7.4~GB shared between CPU and GPU is the strongest practical argument against it. The whole pipeline uses 0.7~GB of GPU memory and 2.8~GB for the whole process (the board never exceeded 5.2~GB), draws 15.7--17.0~W on average (19.1~W at most) and stayed below 70~$^\circ$C. The fingerprint database takes 81~s to build, once per map, and occupies 80.5~MB.
+
+The two blue runs gave identical positions, so the pipeline is deterministic on the board. Compared with the runs on Colab, the accepted photo map checks differ by a median of 0.06~m, and most flights agree within about 0.5~m of ATE. The one large difference is the blue video with the EKF: on the Jetson the map check at frame 10 lands slightly further from the prediction, the $\chi^2$ gate rejects it, and the ATE grows from 3.1 to 5.5~m. The cause is that the GPU of the Jetson rounds the arithmetic of SuperPoint and LightGlue slightly differently and that a different OpenCV version draws the random samples of RANSAC differently. Near the threshold of the gate, such small differences can flip its decision. For that reason, the accuracy results of this thesis are those obtained on Colab, and the times are those of the Jetson. The times are an upper bound: the board ran plain PyTorch with 32-bit numbers, without TensorRT or 16-bit precision, with clocks that were not fixed, in the lab on wall power.
 
 \section{Discussion}
+\label{sec:real-discussion}
+To sum up, the pipeline proved that it transfers to new footage without retraining or retuning. On the held-out (blue) flight a map check locates a photo to about 0.5~m, a photo is found from scratch in 22 of 25 cases, and a 278~m video flight is followed with an ATE of about 3~m, part of which is the uncertainty of the reference. EfficientNet-B0 is the best retriever and the autoencoder the weakest, the CNNs work on the coarse grid, LightGlue verification never accepted a wrong place, and the EKF without IMU improves the reliability of the uncertainty, not the accuracy. All of this corresponds to what we concluded in Chapters~\ref{chap:relocalization} and~\ref{chap:ekf} from the simulated flights and the photos of the first dataset, and the pipeline runs in real time on the Jetson Orin Nano at one image every 3~s.
+
+The new flights also show the limits of the system. It depends on the map still matching the ground. Where it does, the error is below a meter. Where it does not, as on the first half of the orange video, the drone has only odometry. The scale calibration on a single start image is the weak point on both flights, since it failed on orange and was biased by a roof on blue. Calibrating from several map checks along the first part of the flight would remove it. Finally, the evidence is two short flights on one tile, with 13 distinct positions on the held-out flight, the reference is a corrected GPS position and a time-aligned path rather than a surveyed truth, and without IMU recordings the result of the EKF with inertial data from Chapter~\ref{chap:ekf} could not be tested on real flights.
 
 \chapter{Conclusions}
 \label{chap:conclusions}
@@ -1147,6 +1427,11 @@ In \textit{Proceedings of the IEEE Computer Society Conference on Computer Visio
 Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El-Nouby, A., Assran, M., Ballas, N., Galuba, W., Howes, R., Huang, P.-Y., Li, S.-W., Misra, I., Rabbat, M., Sharma, V., \ldots\ Bojanowski, P. (2023).
 DINOv2: Learning robust visual features without supervision.
 arXiv. \url{https://arxiv.org/abs/2304.07193}
+
+\bibitem[Paszke et~al.(2019)]{paszke2019pytorch}
+Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen, T., Lin, Z., Gimelshein, N., Antiga, L., Desmaison, A., K{\"o}pf, A., Yang, E., DeVito, Z., Raison, M., Tejani, A., Chilamkurthy, S., Steiner, B., Fang, L., \ldots\ Chintala, S. (2019).
+PyTorch: An imperative style, high-performance deep learning library.
+In \textit{Advances in Neural Information Processing Systems} (Vol.~32, pp.~8024--8035).
 
 \bibitem[Prutyanov et~al.(2024)]{prutyanov2024deepmatch}
 Prutyanov, V.~V., Ternov, M.~A., \& Kostrov, D.~S. (2024).
