@@ -1316,6 +1316,7 @@ The main question this thesis was trying to answer was whether a drone without G
 
 In relation to the literature reviewed in Chapter~\ref{chap:background}, the pipeline follows the established coarse-to-fine scheme of hierarchical localization \citep{sarlin2019hloc}: candidates are retrieved with a global descriptor and verified with local features. The contribution of this thesis is therefore not a new architecture. It is a controlled comparison of matchers, retrievers and fusion methods on the same data with known-answer tests, a diagnosis of the autoencoder's behavior in conditions different from those it was trained for, and evidence that real-time geo-localization of a UAV based on computer vision is already possible and runs in real time on a board of the kind a drone carries.
 
+\clearpage% keep the whole section on one page
 \section{Limitations}
 \label{sec:limitations}
 Like any other system of this kind, the pipeline has gaps and limitations that should be noted:
@@ -1332,6 +1333,7 @@ Like any other system of this kind, the pipeline has gaps and limitations that s
 \item The $\chi^2$ gate is applied only to map checks and relocalizations, so a wrong odometry step is limited only by the inlier and scale rules. Fabris's method is scored against a 5~m threshold that it cannot meet by construction, since it outputs patch centers on a 25.6~m grid, and the autoencoder is used here on a dense grid and inside a pipeline it was not designed for.
 \end{itemize}
 
+\clearpage% keep the whole section on one page
 \section{Future work}
 \label{sec:future-work}
 Directly following the limitations mentioned above, the following points are proposed as future improvements of the pipeline:
