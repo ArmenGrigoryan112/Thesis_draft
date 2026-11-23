@@ -116,8 +116,37 @@ write your abstract here
 \mainmatter
 \chapter{Introduction}
 \label{chap:introduction}
+This chapter gives the context and the purpose of the pipeline proposed in this thesis. It introduces unmanned aerial vehicles, the navigation systems they use to locate themselves, and the situations in which these systems can be interrupted or interfered with. At the end of the chapter, the scope of the thesis is defined and the outline of the following chapters is given.
+
 \section{Unmanned Aerial Vehicles and navigation systems}
+\label{sec:intro-uav}
+Unmanned Aerial Vehicles (UAVs), otherwise known as drones, have become ordinary tools over the last decade. They are used in fields ranging from agriculture, urban development, infrastructure inspection and delivery to public safety, search and rescue, and military and intelligence operations. \citet{shakhatreh2019survey} estimate the civil drone market alone at more than 45 billion dollars, with civil infrastructure as the largest part. All of these operations depend on the drone knowing its position precisely throughout the flight. To achieve this, a drone fuses several sensors \citep{liu2025survey}:
+
+\begin{itemize}
+\item a receiver for Global Navigation Satellite Systems (GNSS), such as GPS, Galileo, GLONASS and BeiDou,
+\item an inertial measurement unit (IMU), made of accelerometers and gyroscopes,
+\item a magnetometer for heading,
+\item a barometer for altitude.
+\end{itemize}
+
+GNSS gives an absolute position anywhere on Earth, but because it depends on signals from satellites, it is susceptible to interference or complete signal blockage \citep{liu2025survey}. The IMU measures accelerations and rotations at a high rate, so it gives the relative motion between GPS fixes, but its small errors add up over time (drift). In practice the two are fused: GPS corrects the drift of the IMU, and the IMU fills the gaps between GPS fixes. This combination is the most widely used for drone navigation, but it raises the question of what can replace GPS when its signal is missing or wrong.
+
+Since most drones already carry a camera, it is natural to use it in such cases. Matching the camera image against a geo-referenced map gives an absolute position that does not depend on any outside signal. Couturier and Akhloufi \citeyearpar{couturier2024avl} call this absolute visual localization: the current view is compared with reference data, usually satellite imagery or aerial images from earlier flights. Unlike IMU-based navigation, an absolute position does not drift, since each image is located on its own.
+
+The reference map can be satellite imagery or an aerial orthophoto, that is, an aerial photo corrected so that every pixel has a known ground position. Satellite imagery covers far larger areas but is coarser, while an aerial orthophoto is sharper but covers a smaller area \citep{couturier2024avl, durgam2024crossview}. Either can be years older than the flight, so the ground may have changed, and the system must work on images taken long after the map. This thesis uses an aerial orthophoto of Udine provided by the University of Udine, and satellite-scale maps are the natural next step. The pretrained networks used in the pipeline were not trained on this map, so the same method can be tested on other maps and at satellite scale. Whether it holds there is left as future work (Chapter~\ref{chap:conclusions}).
+
 \section{Vulnerabilities: jamming, spoofing, signal loss}
+\label{sec:intro-vulnerabilities}
+GPS can fail in three ways: it can be jammed, spoofed or simply lost, and in each case the drone must rely on its other sensors. The root of the problem is that GPS signals arrive at the receiver extremely weak, at about $10^{-16}$~W ($-130$~dBm) \citep{pnt2010jamming, khan2021spoofing}. The National PNT Advisory Board compares this to someone in Los Angeles seeing the light of a 60~W bulb in New York \citep{pnt2010jamming}. In addition, civil GPS signals have no encryption or authentication, so a receiver has no way to verify that a signal is real \citep{khan2021spoofing}.
+
+Jamming means broadcasting noise on the GPS frequencies so that the receiver can no longer decode the satellite signals \citep{couturier2024avl}. It is cheap and easy to perform: the simplest jammers plug into a car's cigarette lighter and block all GPS reception nearby, while stronger ones can cover tens of square miles \citep{pnt2010jamming}. A jammed drone, however, knows that it has lost GPS, so it can switch to another source of position.
+
+Spoofing means transmitting fake GNSS signals so that the receiver computes a wrong position \citep{khan2021spoofing}. It is more dangerous than jamming, because the drone does not know that its position is wrong and keeps trusting GPS. In June 2012, at White Sands Missile Range, a team from the University of Texas at Austin used a GPS spoofer about 620~m away to take control of a small civil drone hovering under GPS control and force it downward \citep{kerns2014spoofing}. The test showed that spoofing can steer a drone, not only blind it.
+
+GPS can also be lost without any attacker. Buildings, bridges and dense tree cover can block the satellite signals, while reflections from surfaces (multipath) and electromagnetic interference can corrupt them \citep{couturier2024avl, liu2025survey}. A blocked signal has the same effect as jamming, while a reflected one can give a wrong position, much like spoofing.
+
+Without GPS, the drone is left with dead reckoning: estimating its position from the last known fix and the motion measured by the IMU. This can extend a flight for a short time \citep{szykula2025deadreckoning}, but the IMU's error grows quickly, cubically in time according to Couturier and Akhloufi \citeyearpar{couturier2024avl}, so it cannot give a reliable position for long. The aim of this thesis is therefore a pipeline that locates the drone using only what it already carries, its camera and an on-board map, without relying on any outside signal.
+
 \section{Problem statement and contributions}
 \section{Thesis outline}
 
@@ -1382,6 +1411,11 @@ Cabrera-Ponce, A.~A., \& Martinez-Carranza, J. (2022).
 Convolutional neural networks for geo-localisation with a single aerial image.
 \textit{Journal of Real-Time Image Processing}, \textit{19}, 565--575. \url{https://doi.org/10.1007/s11554-022-01207-1}
 
+\bibitem[Couturier \& Akhloufi(2024)]{couturier2024avl}
+Couturier, A., \& Akhloufi, M.~A. (2024).
+A review on deep learning for UAV absolute visual localization.
+\textit{Drones}, \textit{8}(11), 622. \url{https://doi.org/10.3390/drones8110622}
+
 \bibitem[Deng et~al.(2009)]{deng2009imagenet}
 Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., \& Fei-Fei, L. (2009).
 ImageNet: A large-scale hierarchical image database.
@@ -1432,6 +1466,16 @@ Keetha, N., Mishra, A., Karhade, J., Jatavallabhula, K.~M., Scherer, S., Krishna
 AnyLoc: Towards universal visual place recognition.
 arXiv. \url{https://arxiv.org/abs/2308.00688}
 
+\bibitem[Kerns et~al.(2014)]{kerns2014spoofing}
+Kerns, A.~J., Shepard, D.~P., Bhatti, J.~A., \& Humphreys, T.~E. (2014).
+Unmanned aircraft capture and control via GPS spoofing.
+\textit{Journal of Field Robotics}, \textit{31}(4), 617--636. \url{https://doi.org/10.1002/rob.21513}
+
+\bibitem[Khan et~al.(2021)]{khan2021spoofing}
+Khan, S.~Z., Mohsin, M., \& Iqbal, W. (2021).
+On GPS spoofing of aerial platforms: A review of threats, challenges, methodologies, and future research directions.
+\textit{PeerJ Computer Science}, \textit{7}, e507. \url{https://doi.org/10.7717/peerj-cs.507}
+
 \bibitem[Li et~al.(2024)]{li2024crossview}
 Li, H., Xu, C., Yang, W., Yu, H., \& Xia, G.-S. (2024).
 Learning cross-view visual geo-localization without ground truth.
@@ -1471,6 +1515,11 @@ A survey on deep visual place recognition.
 Nassar, A., Amer, K., ElHakim, R., \& ElHelw, M. (2018).
 A deep CNN-based framework for enhanced aerial imagery registration with applications to UAV geolocalization.
 In \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition Workshops} (pp.~1513--1523). \url{https://openaccess.thecvf.com/content_cvpr_2018_workshops/w30/html/Nassar_A_Deep_CNN-Based_CVPR_2018_paper.html}
+
+% TODO: complete this reference (author or presenter, exact title, publisher/meeting, URL)
+\bibitem[National PNT Advisory Board(2010)]{pnt2010jamming}
+National Space-Based Positioning, Navigation, and Timing Advisory Board. (2010).
+\textit{[Presentation on GPS jamming: full reference to be added]}.
 
 \bibitem[Nist{\'e}r et~al.(2004)]{nister2004vo}
 Nist{\'e}r, D., Naroditsky, O., \& Bergen, J. (2004).
@@ -1521,6 +1570,11 @@ In \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
 Scaramuzza, D., \& Fraundorfer, F. (2011).
 Visual odometry [Tutorial].
 \textit{IEEE Robotics \& Automation Magazine}, \textit{18}(4), 80--92. \url{https://doi.org/10.1109/MRA.2011.943233}
+
+\bibitem[Shakhatreh et~al.(2019)]{shakhatreh2019survey}
+Shakhatreh, H., Sawalmeh, A.~H., Al-Fuqaha, A., Dou, Z., Almaita, E., Khalil, I., Othman, N.~S., Khreishah, A., \& Guizani, M. (2019).
+Unmanned aerial vehicles (UAVs): A survey on civil applications and key research challenges.
+\textit{IEEE Access}, \textit{7}, 48572--48634. \url{https://doi.org/10.1109/ACCESS.2019.2909530}
 
 \bibitem[Sun et~al.(2021)]{sun2021loftr}
 Sun, J., Shen, Z., Wang, Y., Bao, H., \& Zhou, X. (2021).
