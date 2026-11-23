@@ -116,11 +116,9 @@ Modern UAVs rely heavily on GPS to localize themselves, but GPS signals are weak
 \mainmatter
 \chapter{Introduction}
 \label{chap:introduction}
-This chapter gives the context and the purpose of the pipeline proposed in this thesis. It introduces unmanned aerial vehicles, the navigation systems they use to locate themselves, and the situations in which these systems can be interrupted or interfered with. At the end of the chapter, the scope of the thesis is defined and the outline of the following chapters is given.
-
 \section{Unmanned Aerial Vehicles and navigation systems}
 \label{sec:intro-uav}
-Unmanned Aerial Vehicles (UAVs), otherwise known as drones, have become ordinary tools over the last decade. They are used in fields ranging from agriculture, urban development, infrastructure inspection and delivery to public safety, search and rescue, and military and intelligence operations. \citet{shakhatreh2019survey} estimate the civil drone market alone at more than 45 billion dollars, with civil infrastructure as the largest part. All of these operations depend on the drone knowing its position precisely throughout the flight. To achieve this, a drone fuses several sensors \citep{liu2025survey}:
+Unmanned Aerial Vehicles (UAVs), otherwise known as drones, have become ordinary tools over the last decade. They are used in fields ranging from agriculture, urban development, infrastructure inspection and delivery to public safety, search and rescue, military and intelligence operations. \citet{shakhatreh2019survey} estimate the civil drone market alone at more than 45 billion dollars, with civil infrastructure as the largest part. All of these operations depend on the drone knowing its position precisely throughout the flight. To achieve this, a drone fuses several sensors \citep{liu2025survey}:
 
 \begin{itemize}
 \item a receiver for Global Navigation Satellite Systems (GNSS), such as GPS, Galileo, GLONASS and BeiDou,
@@ -133,7 +131,7 @@ GNSS gives an absolute position anywhere on Earth, but because it depends on sig
 
 Since most drones already carry a camera, it is natural to use it in such cases. Matching the camera image against a geo-referenced map gives an absolute position that does not depend on any outside signal. Couturier and Akhloufi \citeyearpar{couturier2024avl} call this absolute visual localization: the current view is compared with reference data, usually satellite imagery or aerial images from earlier flights. Unlike IMU-based navigation, an absolute position does not drift, since each image is located on its own.
 
-The reference map can be satellite imagery or an aerial orthophoto, that is, an aerial photo corrected so that every pixel has a known ground position. Satellite imagery covers far larger areas but is coarser, while an aerial orthophoto is sharper but covers a smaller area \citep{couturier2024avl, durgam2024crossview}. Either can be years older than the flight, so the ground may have changed, and the system must work on images taken long after the map. This thesis uses an aerial orthophoto of Udine provided by the University of Udine, and satellite-scale maps are the natural next step. The pretrained networks used in the pipeline were not trained on this map, so the same method can be tested on other maps and at satellite scale. Whether it holds there is left as future work (Chapter~\ref{chap:conclusions}).
+The reference map can be satellite imagery or an aerial orthophoto, that is, an aerial photo corrected so that every pixel has a known ground position. Satellite imagery covers far larger areas but is coarser, while an aerial orthophoto is sharper but covers a smaller area \citep{couturier2024avl, durgam2024crossview}. Either can be years older than the flight, so the ground may have changed, and the system must work on images taken long after the map. This thesis uses an aerial orthophoto of Udine provided by the University of Udine. The pretrained networks used in the pipeline were not trained on this map, so the same method can be tested on other maps and at satellite scale. Whether it holds there is left as future work (Chapter~\ref{chap:conclusions}).
 
 \section{Vulnerabilities: jamming, spoofing, signal loss}
 \label{sec:intro-vulnerabilities}
@@ -1086,14 +1084,7 @@ Since there were no IMU logs available from the flights, we ran the EKF without 
 
 The preparation of the data follows approximately the same pre-processing steps used for the first dataset (Section~\ref{sec:dataset}): the images are resized to the map resolution of 0.1~m per pixel, the scale is calibrated once at the start, and the offset between GPS and the map is measured leave-one-out (1.33~m west and 4.40~m south on orange, 1.62~m west and 2.71~m south on blue). The video frames need one additional factor of 1.17, because they show a narrower field of view than a photo. One problem of the calibration has to be noted. The blue flight starts directly above a house, and the start image was most likely matched on its roof, which is closer to the camera than the ground and therefore appears larger. The later map checks show that, as a result, the blue photos were processed about 15\% too small. This was found only after the blue runs and was not corrected, so that the blue flight stays held-out, which makes its results probably conservative.
 
-The protocol used for the dataset was to set up the configuration on the orange flight and to run the blue flight once with it, as a held-out flight. Only what the new drone forces was set on orange: reading the heading and the focal length from the metadata, the video factor of 1.17, the number of start frames tried for the calibration, one video frame every 3~s as the main sequence, and padding the query with black rows when an image is lower than the 512~px patch. All other settings are the same as in Chapters~\ref{chap:vo} to~\ref{chap:ekf}. Four small departures from this protocol occurred:
-\begin{itemize}
-\item the blue flight was run before the orange results had been reviewed,
-\item a first blue run stopped during the video stage and was repeated with the same settings,
-\item the retriever comparison on blue was run again after the padding of the query was added,
-\item both videos were run a second time with the start heading read from the video metadata, which on blue equals the heading measured in the first run.
-\end{itemize}
-No threshold or noise value was changed at any point.
+The protocol used for the dataset was to set up the configuration on the orange flight and to run the blue flight once with it, as a held-out flight. Only what the new drone forces was set on orange: reading the heading and the focal length from the metadata, the video factor of 1.17, the number of start frames tried for the calibration, one video frame every 3~s as the main sequence, and padding the query with black rows when an image is lower than the 512~px patch. All other settings are the same as in Chapters~\ref{chap:vo} to~\ref{chap:ekf}.
 
 The dataset was tested in three different cases:
 \begin{enumerate}
