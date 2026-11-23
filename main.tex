@@ -1261,7 +1261,7 @@ The orange video starts over ground that rarely matches the map: only 5 of its f
 
 \section{Runtime on the Jetson Orin Nano}
 \label{sec:jetson-runtime}
-The next logical step is to see whether the pipeline is capable of running in real time on hardware that could be attached to a drone. For that reason, the flights of the previous section were run, with unchanged code and settings, on a Jetson Orin Nano Super provided by Denis Tavaris from the University of Udine (8~GB of memory shared by the CPU and the GPU, MAXN SUPER power mode, JetPack 6.2.1, PyTorch 2.11 \citep{paszke2019pytorch}). The pipeline was run twice on the blue flight and once on the orange flight, and the three retrievers were then timed in a separate script. Each stage was timed 30 times after 3 warm-up runs, every frame was also timed during the flights, and the memory, power and temperature of the board were logged once per second. Reading the images from disk is not included. Table~\ref{tab:jetson-stages} and Figure~\ref{fig:jetson-stages} give the time of each stage, as the median of 30 runs on the second blue run. The other two runs agree within 1--2\%.
+The next logical step is to see whether the pipeline is capable of running in real time on hardware that could be attached to a drone. For that reason, the flights of the previous section were run, with unchanged code and settings, on a Jetson Orin Nano Super provided by Denis Tavaris from the University of Udine (8~GB of memory shared by the CPU and the GPU, MAXN SUPER power mode, JetPack 6.2.1, PyTorch 2.11 \citep{paszke2019pytorch}). The pipeline was run twice on the blue flight and once on the orange flight, and the three retrievers were then timed in a separate script. Each stage was timed 30 times after 3 warm-up runs, every frame was also timed during the flights, and the memory, power and temperature of the board were logged once per second. Reading the images from disk is not included. Table~\ref{tab:jetson-stages} gives the time of each stage, as the median of 30 runs on the second blue run. The other two runs agree within 1--2\%.
 
 \begin{table}[!htbp]
   \centering
@@ -1286,14 +1286,8 @@ The next logical step is to see whether the pipeline is capable of running in re
   \end{tabular}
 \end{table}
 
-\begin{figure}[!htbp]
-  \centering
-  \includegraphics[width=0.85\textwidth]{images/jetson-stage-times.pdf}
-  \caption{Time per stage on the Jetson Orin Nano Super}
-  \label{fig:jetson-stages}
-\end{figure}
 
-SuperPoint and LightGlue make up about 94\% of an odometry step, and the fingerprint and the search together are under 2\% of a relocalization. LightGlue is the only stage whose time varies (39--95~ms), because it depends on the number of keypoints. Figure~\ref{fig:jetson-stages} shows the median and the range of the 30 runs of each stage. In flight a normal frame takes about 0.25~s (median per flight 248--325~ms), and the time of a frame depends on what happens in it (Table~\ref{tab:jetson-frames}).
+SuperPoint and LightGlue make up about 94\% of an odometry step, and the fingerprint and the search together are under 2\% of a relocalization. LightGlue is the only stage whose time varies (39--95~ms), because it depends on the number of keypoints. In flight a normal frame takes about 0.25~s (median per flight 248--325~ms), and the time of a frame depends on what happens in it (Table~\ref{tab:jetson-frames}).
 
 \begin{table}[!htbp]
   \centering
