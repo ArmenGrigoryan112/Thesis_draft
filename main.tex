@@ -148,7 +148,35 @@ GPS can also be lost without any attacker. Buildings, bridges and dense tree cov
 Without GPS, the drone is left with dead reckoning: estimating its position from the last known fix and the motion measured by the IMU. This can extend a flight for a short time \citep{szykula2025deadreckoning}, but the IMU's error grows quickly, cubically in time according to Couturier and Akhloufi \citeyearpar{couturier2024avl}, so it cannot give a reliable position for long. The aim of this thesis is therefore a pipeline that locates the drone using only what it already carries, its camera and an on-board map, without relying on any outside signal.
 
 \section{Problem statement and contributions}
+\label{sec:intro-problem}
+This thesis answers the following question: can a drone without GPS accurately locate itself from a downward-looking camera and an on-board orthophoto, even when it has lost track of its position? The following chapters show that it can, within the scope set out below.
+
+The inputs of the system are the orthophoto and the camera images, and the output is the drone's position on the map for every image. The system must handle two situations. In the first, the drone is tracked from image to image, so its position is roughly known. In the second, the drone is lost, either because the camera is blacked out for a while or because the flight starts from a wrong position, and it has to find itself on the map from scratch. Both cases are tested in simulation, and the blackout also on a real video. All of this has to run on the drone's own computer.
+
+The data was provided by the University of Udine in two sets. The first contains six orthophoto tiles of Udine, each about $900 \times 840$~m, and 58 real photos from the flight used by \citet{fabris2025thesis}. All six tiles are used for the odometry benchmark, while the retriever comparison, the EKF and all real data use a single tile. Flights simulated over the tiles provide the known answers for most of the tests. The second set contains two new real flights over the same tile: one was used to set up the configuration, and the other was kept apart as a held-out test of the complete pipeline. In all cases the camera looks straight down, the altitude is roughly known, and the ground is treated as flat. None of the data contains IMU measurements, so the IMU used with the EKF is simulated.
+
+The starting point of this thesis is the master's thesis of \citet{fabris2025thesis}, \textit{Real-Time Localization Algorithm for GPS-Denied Drone Navigation}, which developed an autoencoder-based system for drone geo-localization over the same area.
+
+The proposed pipeline is one hierarchical system with three parts:
+\begin{itemize}
+\item frame-to-frame visual odometry, corrected by a check against the map every few images,
+\item relocalization for when the drone is lost: a retrieval step proposes candidate places, and LightGlue verifies them,
+\item an extended Kalman filter (EKF), which fuses the measurements and tracks how uncertain the position is.
+\end{itemize}
+
+The main contributions of the thesis are the following:
+\begin{enumerate}
+\item A comparison of matchers for visual odometry, SuperPoint + LightGlue against EfficientLoFTR, with known-answer tests.
+\item A comparison of retrievers, Fabris's autoencoder against pretrained CNNs, including a diagnosis of why the autoencoder fails on real photos.
+\item A comparison of fixed rules against the EKF, with and without a simulated IMU.
+\item An evaluation of the complete pipeline on a held-out real flight, and a measurement of its runtime on an on-board computer, the Jetson Orin Nano Super.
+\end{enumerate}
+
+The pipeline was designed and built for this thesis, but its overall scheme follows the established coarse-to-fine approach of hierarchical localization \citep{sarlin2019hloc}. Its contribution is therefore not a new localization method, but a controlled comparison of the possible components and a complete working pipeline built from the ones that performed best.
+
 \section{Thesis outline}
+\label{sec:intro-outline}
+The rest of the thesis is organized as follows. Chapter~\ref{chap:background} introduces the methods the pipeline builds on: feature extraction and matching, CNN-based image retrieval, visual odometry and the extended Kalman filter. It also reviews the related work, including the autoencoder of \citet{fabris2025thesis}. Chapter~\ref{chap:data} describes the data, the flight simulation and augmentation used to create known-answer tests, and the evaluation metrics. Chapter~\ref{chap:vo} builds the visual odometry and compares SuperPoint + LightGlue with EfficientLoFTR. It then analyzes the failure modes and drift of the odometry and introduces the map checks that correct it. Chapter~\ref{chap:relocalization} adds relocalization for a lost drone and compares Fabris's autoencoder with pretrained CNN retrievers. Chapter~\ref{chap:ekf} replaces the fixed rules of the pipeline with an extended Kalman filter and tests it with and without a simulated IMU. Chapter~\ref{chap:evaluation} evaluates the complete pipeline on the new real flights and measures its runtime on the Jetson Orin Nano Super. Finally, Chapter~\ref{chap:conclusions} summarizes the main findings, discusses the limitations and proposes future work.
 
 \chapter{Background and related work}
 \label{chap:background}
