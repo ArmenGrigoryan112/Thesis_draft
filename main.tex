@@ -550,9 +550,9 @@ Figures~\ref{fig:vo-flight} and~\ref{fig:vo-matches} demonstrate these results o
 
 In Figure~\ref{fig:vo-flight}, green denotes the position error of LightGlue while red denotes the position error of EfficientLoFTR. Clearly, LightGlue follows the true path, its error rising slowly with distance to 1.0~m at the end. EfficientLoFTR on the other hand leaves the path within the first steps and ends approximately 54~m off. When each image is matched against the map, LightGlue's error no longer grows. It stays below 0.5~m and ends 0.3~m off. That is precisely the reason the pipeline uses map checks every once in a while.
 
-\begin{figure}[!htbp]
+\begin{figure}[!hb]
   \centering
-  \includegraphics[width=0.62\textwidth]{images/vo-matches-step.jpg}
+  \includegraphics[width=0.52\textwidth]{images/vo-matches-step.jpg}
   \caption{Matches of both matchers on one step}
   \label{fig:vo-matches}
 \end{figure}
